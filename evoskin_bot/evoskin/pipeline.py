@@ -5,9 +5,10 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from . import animate, imageio, layers as lay, segment
+from . import animate, imageio, inpaint, layers as lay, segment
 
 GIF_MS = {"idle": 110, "fly": 80, "attack": 75}
+MAX_SIDE = 1100          # working size cap (px); keeps a job under ~0.7 GB of RAM
 
 
 @dataclass
@@ -24,11 +25,14 @@ def _prepare(data):
     img = imageio.decode(data)
     rgba = imageio.remove_background(img)
     rgba = imageio.crop_to_content(rgba, 8)
-    # tiny skins segment badly; bring the skull to a workable size
-    h = rgba.shape[0]
+    # tiny skins segment badly; huge ones only cost memory and time
+    h, w = rgba.shape[:2]
     if h < 300:
         f = 300.0 / h
         rgba = cv2.resize(rgba, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
+    elif max(h, w) > MAX_SIDE:
+        f = MAX_SIDE / max(h, w)
+        rgba = cv2.resize(rgba, None, fx=f, fy=f, interpolation=cv2.INTER_AREA)
     return rgba
 
 
@@ -56,6 +60,7 @@ def run(data: bytes) -> Result:
     rgba = _prepare(data)
     seg = segment.segment(rgba)
     L = lay.build(rgba, seg)
+    inpaint.release()
     H, W = rgba.shape[:2]
     pad = int(0.5 * max(H, W))
     frames = animate.render(L, seg, (H + 2 * pad, W + 2 * pad), (pad, pad))

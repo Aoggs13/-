@@ -64,8 +64,20 @@ def _get_session():
 
 
 def warm():
-    """Fetch and load the model before the bot starts taking jobs."""
-    return _get_session() is not None
+    """Fetch the model before the bot starts taking jobs (it is loaded per job)."""
+    ok = _get_session() is not None
+    release()
+    return ok
+
+
+def release():
+    """Drop the session: onnxruntime keeps its memory arena until the session dies, and the
+    rest of the job (rendering 19 frames) should not stack on top of it on 1 GB hosts."""
+    global _session
+    with _lock:
+        _session = None
+    import gc
+    gc.collect()
 
 
 def _lama(bgr, mask):
