@@ -16,3 +16,8 @@ Tests: `python -m pytest -q tests` (9 pass; model-dependent ones skip without mo
 3. Ask the user to add `BOT_TOKEN` in the service Variables (do not ask them to paste it in chat).
 4. Deploy, watch logs for `bot started`, then ask the user to send `/start` and a photo.
 5. Remind the user to rotate the token in @BotFather (/revoke) afterwards — the old one was pasted in chat once.
+
+## Second bot: `evoskin_bot/` (evoworld.io reaper skin animator)
+- User sends a reaper skin (standard pose) → bot returns idle 6 / fly 5 / attack 8 frames posed like the black reaper (ZIP of PNGs + GIFs).
+- Rig measured from `evoskin_bot/tools/black_reaper/*.png`; tests: `cd evoskin_bot && python -m pytest -q tests`.
+- Railway: separate service, root directory `evoskin_bot`, volume `/data`, its own `BOT_TOKEN`.
