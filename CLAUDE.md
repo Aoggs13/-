@@ -20,4 +20,6 @@ Tests: `python -m pytest -q tests` (9 pass; model-dependent ones skip without mo
 ## Second bot: `evoskin_bot/` (evoworld.io reaper skin animator)
 - User sends a reaper skin (standard pose) → bot returns idle 6 / fly 5 / attack 8 frames posed like the black reaper (ZIP of PNGs + GIFs).
 - Rig measured from `evoskin_bot/tools/black_reaper/*.png`; tests: `cd evoskin_bot && python -m pytest -q tests`.
-- Railway: separate service, root directory `evoskin_bot`, volume `/data`, its own `BOT_TOKEN`.
+- Railway: separate service from branch `claude/t-f02kb7` (until merged), root directory `/evoskin_bot`, config file `/evoskin_bot/railway.json` (absolute path), volume `/data`, its own `BOT_TOKEN`.
+- Peak RAM ~0.95 GB with LaMa (measured); on hosts with < 1 GB set `EVOSKIN_LAMA=0` (~0.36 GB, blurrier fills).
+- Old Railway account (aoggs13) trial expired; the user switched Railway accounts — reconnect the Railway connector at claude.ai/customize/connectors and start a new session before deploying.

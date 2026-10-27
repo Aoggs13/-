@@ -1,7 +1,8 @@
 """Telegram bot: send a reaper skin (standard pose), get idle / fly / attack frames posed like the black reaper.
 
 Env:  BOT_TOKEN (or TELEGRAM_BOT_TOKEN) is required and is read only from the environment.
-      MODELS_DIR (LaMa inpainting model is downloaded there on first start), LOG_LEVEL.
+      MODELS_DIR (LaMa inpainting model is downloaded there on first start), LOG_LEVEL,
+      EVOSKIN_LAMA=0 turns LaMa off for hosts with less than ~1 GB of RAM.
 """
 
 from __future__ import annotations

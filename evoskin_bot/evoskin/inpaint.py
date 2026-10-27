@@ -49,6 +49,8 @@ def ensure_model():
 
 def _get_session():
     global _session
+    if os.environ.get("EVOSKIN_LAMA", "1") == "0":   # small hosts (<1 GB RAM): classic fill only
+        return None
     with _lock:
         if _session is None:
             path = ensure_model()
