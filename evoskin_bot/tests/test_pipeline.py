@@ -34,7 +34,7 @@ def br_render():
     rgba = reference.ref_image()
     seg = segment.segment(rgba)
     L = layers.build(rgba, seg)
-    return seg, animate.render(L, seg, rgba.shape[:2], (0, 0))
+    return seg, animate.render(L, seg, canvas=(0, 0, rgba.shape[1], rgba.shape[0]))
 
 
 def test_reference_segmentation(br_render):
@@ -67,9 +67,8 @@ def test_full_run_on_scaled_skin():
     assert len(sizes) == 1                       # every frame on the same canvas
     assert res.info["skull_found"]
     names = zipfile.ZipFile(io.BytesIO(res.zip_bytes)).namelist()
-    assert "frames/attack_8.png" in names and "layers/scythe.png" in names and "preview/idle.gif" in names
-    for anim in ("idle", "fly", "attack"):
-        assert res.gifs[anim][:6] in (b"GIF89a", b"GIF87a")
+    assert "frames/attack_8.png" in names and "layers/scythe.png" in names and "layers/sleeve.png" in names
+    assert not [n for n in names if n.endswith(".gif")]          # frames only, no animations
 
 
 def test_white_background_photo():

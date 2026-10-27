@@ -32,6 +32,8 @@ class Segmentation:
     outline: float              # outline thickness in px
     outline_color: np.ndarray
     anchors: dict = field(default_factory=dict)   # skin points matching the rig pivots
+    front_band: np.ndarray = field(default=None, repr=False)   # hanging front sleeve (raised in attacks)
+    back_band: np.ndarray = field(default=None, repr=False)    # back sleeve (part of the back arm)
     skull: dict = field(default=None, repr=False)
 
 
@@ -301,11 +303,61 @@ def segment(rgba):
 
     labels = clean_labels(labels, rgba[..., 3] > 0, s)
     anchors = part_anchors(labels, S_body, s, rig)
+    # sleeves: the back sleeve swings with the back hand; the front one is lifted in the attacks
+    S_arm = reg.sim(s, *(anchors["body"] - s * np.array(rig["pivots"]["body"], float)))
+    back_band = arm_band(labels, ink, S_arm, BACK_BAND, outline_w, s)
+    labels[back_band] = BACK_HAND
+    front_band = arm_band(labels, ink, S_arm, FRONT_BAND, outline_w, s)
 
     return Segmentation(labels=labels, S_head=S_head, S_body=S_body, scale=s, grip=np.asarray(grip, float),
                         axis_p=p_bot, axis_d=d, handle_len=float(handle_len), handle_hw=hw, gap=gap,
                         scythe_in_front=bool(scythe_in_front), outline=outline_w,
-                        outline_color=outline_col, anchors=anchors, skull=skull)
+                        outline_color=outline_col, anchors=anchors, front_band=front_band,
+                        back_band=back_band, skull=skull)
+
+
+# hanging sleeves of the black reaper idle pose (outer outline to the line that parts them from the robe)
+FRONT_BAND = [(208, 158), (219, 157), (230, 176), (226, 182), (214, 182), (209, 170)]
+BACK_BAND = [(150, 161), (171, 161), (171, 189), (152, 189), (141, 190), (143, 178)]
+
+
+def arm_band(labels, ink, S, poly, outline_w, s):
+    """Sleeve pixels of the skin's robe that match a black reaper sleeve.
+
+    Regions of the robe that the skin's own lines separate and that lie mostly inside the
+    mapped sleeve outline are taken whole; the line between sleeve and robe stays with
+    the robe (it becomes the robe's edge when the arm moves away)."""
+    H, W = labels.shape
+    pm = np.zeros((H, W), np.uint8)
+    cv2.fillPoly(pm, [np.round([reg.apply(S, q) for q in poly]).astype(np.int32)], 1)
+    pm = pm.astype(bool)
+    body = labels == BODY
+    if not (pm & body).any():
+        return np.zeros((H, W), bool)
+    nonink = body & ~ink
+    n, lab = cv2.connectedComponents(nonink.astype(np.uint8), connectivity=4)
+    keep = np.zeros((H, W), bool)
+    area = (pm & body).sum()
+    for i in np.unique(lab[pm & nonink]):
+        if i == 0:
+            continue
+        comp = lab == i
+        cs = comp.sum()
+        if (comp & pm).sum() / cs > 0.55 and cs < 3 * area:
+            keep |= comp
+    keep = fill_holes(keep, body)
+    # the skin's own sleeve line is used only when it matches the black reaper sleeve well;
+    # otherwise cut along the black reaper sleeve outline itself
+    cover = (keep & pm).sum() / max(area, 1)
+    spill = (keep & ~dilate(pm, 3 * s)).sum() / max(keep.sum(), 1)
+    if cover < 0.7 or spill > 0.25:
+        keep = fill_holes(pm & nonink, body)
+    band = keep | (ink & body & dilate(keep, 1.5 * outline_w))
+    # the line towards the rest of the robe stays on the robe (the robe's inside, not its
+    # anti-aliased rim: the sleeve's outer outline goes with the sleeve)
+    rest = nonink & ~keep & erode(labels > 0, 2)
+    inner = band & ink & dilate(rest, 1.2 * outline_w) & ~keep
+    return band & ~inner
 
 
 def part_anchors(labels, S_body, s, rig):

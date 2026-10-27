@@ -17,9 +17,6 @@ def main():
         f.write(res.zip_bytes)
     with open(os.path.join(out, "sheet.png"), "wb") as f:
         f.write(res.sheet)
-    for anim, g in res.gifs.items():
-        with open(os.path.join(out, anim + ".gif"), "wb") as f:
-            f.write(g)
     print("done in %.1fs" % res.seconds, res.info)
 
 

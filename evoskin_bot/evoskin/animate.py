@@ -5,10 +5,9 @@ from functools import lru_cache
 
 import cv2
 import numpy as np
-from PIL import Image
 
 from . import reference as ref
-from .layers import sleeve_sprite
+from .layers import sleeve_tube
 
 PARTS = ["scythe", "body", "head", "back_hand", "front_hand"]
 
@@ -109,39 +108,119 @@ def from_pm(pm):
     return (np.clip(np.dstack([rgb, a]), 0, 1) * 255 + 0.5).astype(np.uint8)
 
 
-def render(layers, seg, out_shape, offset, scale_out=1.0):
-    """Render all 19 frames. Returns dict frame_name -> BGRA (uncropped canvas)."""
+def two_point(a0, b0, a1, b1):
+    """Affine map taking segment a0-b0 onto a1-b1: rotate, stretch only along the segment."""
+    a0, b0, a1, b1 = (np.asarray(v, float) for v in (a0, b0, a1, b1))
+    v0, v1 = b0 - a0, b1 - a1
+    n0 = np.linalg.norm(v0)
+    if n0 < 1e-6:
+        return np.array([[1.0, 0, a1[0] - a0[0]], [0, 1.0, a1[1] - a0[1]], [0, 0, 1]])
+    ang = np.arctan2(v1[1], v1[0]) - np.arctan2(v0[1], v0[0])
+    k = np.linalg.norm(v1) / n0
+    c, sn = np.cos(ang), np.sin(ang)
+    e = v0 / n0
+    B = np.stack([e, [-e[1], e[0]]], 1)
+    M = np.array([[c, -sn], [sn, c]]) @ B @ np.diag([k, 1.0]) @ B.T
+    return np.vstack([np.hstack([M, (a1 - M @ a0)[:, None]]), [0, 0, 1]])
+
+
+def frame_plan(layers, seg, name, ref_frame):
+    """Draw list for one frame: [(layer name, image, 3x3 matrix)] back to front."""
+    f = ref.rig()["frames"][name]
+    M = frame_matrices(seg, name, ref_frame)
+    order = f["order"]
+    if order == "ref":
+        order = (["body", "scythe"] if seg.scythe_in_front else ["scythe", "body"]) + ["head", "back_hand", "front_hand"]
+    raised = "sleeve" in order
+    plan = []
+    for p in order:
+        if p == "sleeve":
+            if layers.sleeve_axis is None:
+                continue
+            sh, wr = layers.sleeve_axis
+            sh_f = (M["body"] @ np.array([*sh, 1.0]))[:2]
+            wr_f = (M["front_hand"] @ np.array([*wr, 1.0]))[:2]
+            plan.append(("sleeve", None, (sh_f, wr_f)))
+        elif p == "body":
+            plan.append(("body", layers.body_raised if raised else layers.body, M["body"]))
+        else:
+            plan.append((p, layers.get(p), M[p]))
+    return plan
+
+
+def _bbox(img):
+    ys, xs = np.nonzero(img[..., 3] > 0)
+    if len(xs) == 0:
+        return None
+    return np.array([[xs.min(), ys.min()], [xs.max() + 1, ys.min()], [xs.min(), ys.max() + 1], [xs.max() + 1, ys.max() + 1]], float)
+
+
+def render(layers, seg, margin=6, canvas=None):
+    """Render all 19 frames onto one shared canvas that just fits every pose
+    (or onto `canvas` = (x0, y0, width, height) in skin pixels).
+
+    Returns dict frame_name -> BGRA.  Layers are warped and composited one at a time so the
+    memory stays a couple of canvases however large the skin is."""
     rig = ref.rig()
     ref_frame = pick_ref_frame(seg)
-    pms = {p: to_pm(layers.get(p)) for p in PARTS}
-    H, W = out_shape
-    O = np.array([[scale_out, 0, offset[0]], [0, scale_out, offset[1]], [0, 0, 1]])
-    sl = rig["sleeve"]
+    plans = {name: frame_plan(layers, seg, name, ref_frame) for name in rig["frames"]}
+    boxes = {}
+    pts = []
+    radius = ref.rig()["sleeve"]["radius"] * seg.scale
+    for plan in plans.values():
+        for p, img, A in plan:
+            if p == "sleeve":
+                for c in A:
+                    pts.append(np.array([c - radius, c + radius]))
+                continue
+            if p not in boxes:
+                boxes[p] = _bbox(img)
+            b = boxes[p]
+            if b is not None:
+                pts.append((A[:2, :2] @ b.T).T + A[:2, 2])
+    if canvas is None:
+        pts = np.concatenate(pts)
+        x0, y0 = np.floor(pts.min(0)).astype(int) - margin
+        x1, y1 = np.ceil(pts.max(0)).astype(int) + margin
+        W, H = int(x1 - x0), int(y1 - y0)
+    else:
+        x0, y0, W, H = canvas
+    O = np.array([[1.0, 0, -x0], [0, 1.0, -y0], [0, 0, 1]])
+    pms = {}
     frames = {}
-    for name, f in rig["frames"].items():
-        M = frame_matrices(seg, name, ref_frame)
-        warped = {}
-        for p in PARTS:
-            A = (O @ M[p])[:2]
-            warped[p] = cv2.warpAffine(pms[p], A, (W, H), flags=cv2.INTER_CUBIC, borderValue=0)
-            warped[p] = np.clip(warped[p], 0, 1)
-            warped[p][..., :3] = np.minimum(warped[p][..., :3], warped[p][..., 3:4])
-        order = f["order"]
-        if order == "ref":
-            order = (["body", "scythe"] if seg.scythe_in_front else ["scythe", "body"]) + ["head", "back_hand", "front_hand"]
-        if "sleeve" in order:
-            Gb = part_G(seg, "body", ref_frame)
-            sh = (O @ Gb @ br_transform(name, "body") @ np.array([*sl["shoulder"], 1.0]))[:2]
-            wr0 = np.asarray(seg.anchors["front_hand"], float) + seg.scale * np.array(sl["wrist_offset"])
-            wr = (O @ M["front_hand"] @ np.array([*wr0, 1.0]))[:2]
-            sp = sleeve_sprite(layers.body, seg, sh, wr, sl["radius"] * seg.scale * scale_out, (H, W))
-            warped["sleeve"] = to_pm(sp)
+    for name, plan in plans.items():
         acc = np.zeros((H, W, 4), np.float32)
-        for p in order:
-            l = warped[p]
-            acc = l + acc * (1 - l[..., 3:4])
+        for p, img, A in plan:
+            if p == "sleeve":
+                sh_f, wr_f = ((O @ np.array([*c, 1.0]))[:2] for c in A)
+                tube = _tube_on_canvas(layers, seg, sh_f, wr_f, radius, O, (H, W))
+                l = to_pm(tube)
+                acc *= 1 - l[..., 3:4]
+                acc += l
+                continue
+            key = (p, id(img))
+            if key not in pms:
+                pms[key] = to_pm(img)
+            l = cv2.warpAffine(pms[key], (O @ A)[:2], (W, H), flags=cv2.INTER_CUBIC, borderValue=0)
+            np.clip(l, 0, 1, out=l)
+            np.minimum(l[..., :3], l[..., 3:4], out=l[..., :3])
+            acc *= 1 - l[..., 3:4]
+            acc += l
+            del l
         frames[name] = from_pm(acc)
+        del acc
     return frames
+
+
+def _tube_on_canvas(layers, seg, sh_f, wr_f, radius, O, shape):
+    """Sleeve tube drawn on the output canvas; its texture comes from the robe layer, which is
+    first moved onto the canvas with the plain offset O."""
+    H, W = shape
+    body = cv2.warpAffine(layers.body, O[:2], (W, H), flags=cv2.INTER_NEAREST, borderValue=0)
+    ax = None
+    if layers.sleeve_axis is not None:
+        ax = tuple((O @ np.array([*c, 1.0]))[:2] for c in layers.sleeve_axis)
+    return sleeve_tube(body, seg, ax, sh_f, wr_f, radius, (H, W))
 
 
 def crop_frames(frames, margin):
@@ -156,21 +235,6 @@ def crop_frames(frames, margin):
 
 def sequences():
     return ref.rig()["sequences"]
-
-
-def to_pil(bgra):
-    return Image.fromarray(cv2.cvtColor(bgra, cv2.COLOR_BGRA2RGBA))
-
-
-def gif_bytes(frames_bgra, durations, bg=(255, 255, 255)):
-    ims = []
-    for fr in frames_bgra:
-        a = fr[..., 3:4].astype(np.float32) / 255
-        rgb = fr[..., :3].astype(np.float32) * a + np.array(bg[::-1], np.float32) * (1 - a)
-        ims.append(Image.fromarray(cv2.cvtColor(rgb.astype(np.uint8), cv2.COLOR_BGR2RGB)).convert("P", palette=Image.ADAPTIVE, colors=255))
-    buf = io.BytesIO()
-    ims[0].save(buf, format="GIF", save_all=True, append_images=ims[1:], duration=durations, loop=0, disposal=2)
-    return buf.getvalue()
 
 
 def png_bytes(bgra):

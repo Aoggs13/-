@@ -18,8 +18,9 @@ Tests: `python -m pytest -q tests` (9 pass; model-dependent ones skip without mo
 5. Remind the user to rotate the token in @BotFather (/revoke) afterwards — the old one was pasted in chat once.
 
 ## Second bot: `evoskin_bot/` (evoworld.io reaper skin animator)
-- User sends a reaper skin (standard pose) → bot returns idle 6 / fly 5 / attack 8 frames posed like the black reaper (ZIP of PNGs + GIFs).
-- Rig measured from `evoskin_bot/tools/black_reaper/*.png`; tests: `cd evoskin_bot && python -m pytest -q tests`.
-- Railway: separate service from branch `claude/t-f02kb7` (until merged), root directory `/evoskin_bot`, config file `/evoskin_bot/railway.json` (absolute path), volume `/data`, its own `BOT_TOKEN`.
-- Peak RAM ~0.95 GB with LaMa (measured); on hosts with < 1 GB set `EVOSKIN_LAMA=0` (~0.36 GB, blurrier fills).
-- Old Railway account (aoggs13) trial expired; the user switched Railway accounts — reconnect the Railway connector at claude.ai/customize/connectors and start a new session before deploying.
+- User sends a reaper skin (standard pose) → bot returns idle 6 / fly 5 / attack 8 frames posed like the black reaper (frames sheet + ZIP of PNG frames and layers). **No GIFs** — the user does not want animations, only the frames.
+- User's quality bar: hands complete, hidden areas filled like the original, nothing "eaten" (smudged); compare every frame zoomed before claiming done.
+- Rig measured from `evoskin_bot/tools/black_reaper/*.png`; tests: `cd evoskin_bot && python -m pytest -q tests` (10 pass).
+- Each job runs in a child process (`python -m evoskin.worker`), 2 threads, retried without LaMa if it dies; jobs cut by a restart get a message on next start (`/data/state`). Peak ~0.66 GB with LaMa.
+- Arms: back sleeve moves with the back hand; front sleeve is lifted in attack_2/3/4 as a tube textured from the skin's robe; robe edge under a sleeve = the skin's sleeve line.
+- Railway (account aidosmaksatuli): project `EvoSkinBot`, service `evoskin-animator`, image `python:3.13-slim`, volume `/data`, 1 GB RAM limit. Its start command downloads branch `claude/t-f02kb7` from GitHub (public repo) on every start, so deploying = push + restart the service. `BOT_TOKEN` is set in its Variables; never write it anywhere else.

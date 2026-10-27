@@ -59,6 +59,10 @@ def _get_session():
             import onnxruntime as ort
             so = ort.SessionOptions()
             so.log_severity_level = 3
+            # the host may report dozens of cores while the container gets 2: oversubscription is very slow
+            so.intra_op_num_threads = int(os.environ.get("EVOSKIN_THREADS", "2"))
+            so.inter_op_num_threads = 1
+            so.enable_mem_pattern = False      # measured: 605 MB peak instead of 761 MB, same speed
             _session = ort.InferenceSession(path, so, providers=["CPUExecutionProvider"])
         return _session
 

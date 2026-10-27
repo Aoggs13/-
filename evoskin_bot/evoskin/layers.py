@@ -11,10 +11,13 @@ from .segment import BODY, HEAD, BACK_HAND, FRONT_HAND, SCYTHE, dilate, erode, d
 @dataclass
 class Layers:
     head: np.ndarray
-    body: np.ndarray
-    back_hand: np.ndarray
+    body: np.ndarray           # robe with the front sleeve hanging, as drawn
+    body_raised: np.ndarray    # robe without the front sleeve (attack frames that lift the arm)
+    back_hand: np.ndarray      # back hand together with its sleeve
     front_hand: np.ndarray
     scythe: np.ndarray
+    sleeve: np.ndarray         # the skin's own front sleeve, cut out of the robe
+    sleeve_axis: tuple         # (shoulder, wrist) points of that sleeve in skin pixels
 
     def get(self, name):
         return getattr(self, name)
@@ -103,90 +106,160 @@ def complete_handle(layer, seg):
     return out
 
 
-def complete_body(rgba, seg):
+def outline_cut(layer, mask, cut_side, ow, color):
+    """Draw the skin's outline along the part of `mask`'s border that was cut from a neighbour."""
+    ring = mask & ~erode(mask, ow) & dilate(cut_side, ow + 1)
+    layer[ring, :3] = color
+    layer[ring, 3] = 255
+
+
+def body_holes(seg, remove):
+    """Robe pixels that stay, and the holes that moving parts leave in it.
+
+    `remove`: sleeve pixels that leave the robe; the line between sleeve and robe stays and
+    becomes the robe's edge.  Hands (and a scythe drawn in front) leave holes to fill."""
     lab = seg.labels
-    s = seg.scale
-    body = lab == BODY
-    over = (lab == FRONT_HAND) | (lab == BACK_HAND)
-    if seg.scythe_in_front:
-        over |= lab == SCYTHE
+    body = (lab == BODY) & ~remove
+    paws = ((lab == FRONT_HAND) | (lab == BACK_HAND)) & ~remove
+    over = paws | ((lab == SCYTHE) if seg.scythe_in_front else False)
     head = lab == HEAD
-    band = head & dilate(body, 7 * s) & ~erode(head, 1)
+    band = head & dilate(body, 7 * seg.scale) & ~erode(head, 1)
     grow = dilate(over, seg.outline + 2)
     hole = ((grow & ~(lab == SCYTHE)) | band) if not seg.scythe_in_front else (grow | band)
-    hole &= (lab != 0) | dilate(over, 2)
-    if not hole.any():
-        return cut(rgba, body)
-    # silhouette inside the holes: diffuse the body's alpha from the hole border, then smooth
-    a = np.where(body, 255, 0).astype(np.uint8)
-    a_in = cv2.inpaint(a, hole.astype(np.uint8), 3, cv2.INPAINT_TELEA).astype(np.float32)
-    sm = cv2.GaussianBlur(a_in, (0, 0), max(1.0, 1.2 * seg.outline))
-    ext = (np.where(hole, sm, a_in) > 127) & hole
-    new_body = (body & ~hole) | ext
-    new_body = cv2.morphologyEx(new_body.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8)).astype(bool) | (body & ~hole)
-    # colours: LaMa on the body composited over its own median colour
-    med = np.median(rgba[..., :3][body & (dist_to(~body) > 3)], 0) if body.sum() > 50 else np.array([128, 128, 128])
-    base = np.where(body[..., None], rgba[..., :3], med.astype(np.uint8)).astype(np.uint8)
-    filled = inpaint.fill(base, hole)
+    hole &= ((lab != 0) | dilate(over, 2)) & ~remove
+    return body, hole
+
+
+def complete_body(rgba, seg, remove, filled):
+    """Robe layer: kept pixels, holes coloured from `filled`, silhouette closed and outlined."""
+    body, hole = body_holes(seg, remove)
+    ow = max(int(round(seg.outline)), 1)
     out = np.zeros_like(rgba)
-    keep = body & ~hole
+    if hole.any():
+        # silhouette inside the holes: diffuse the body's alpha from the hole border, then smooth
+        a = np.where(body, 255, 0).astype(np.uint8)
+        a_in = cv2.inpaint(a, hole.astype(np.uint8), 3, cv2.INPAINT_TELEA).astype(np.float32)
+        sm = cv2.GaussianBlur(a_in, (0, 0), max(1.0, 1.2 * seg.outline))
+        ext = (np.where(hole, sm, a_in) > 127) & hole
+        new_body = (body & ~hole) | ext
+        new_body = cv2.morphologyEx(new_body.astype(np.uint8), cv2.MORPH_OPEN,
+                                    np.ones((3, 3), np.uint8)).astype(bool) | (body & ~hole)
+    else:
+        new_body = body
+    # crumbs left over by the cuts (bits of outline) are not part of the robe
+    n, cl, st, _ = cv2.connectedComponentsWithStats(new_body.astype(np.uint8), connectivity=8)
+    if n > 2:
+        big = st[1:, 4].max()
+        for i in range(1, n):
+            if st[i, 4] < 0.02 * big:
+                new_body[cl == i] = False
+    keep = body & ~hole & new_body
     out[..., :3] = np.where(keep[..., None], rgba[..., :3], filled)
     out[..., 3] = np.where(keep, rgba[..., 3], np.where(new_body, 255, 0)).astype(np.uint8)
-    # redraw the outline along the new silhouette inside the holes
-    ow = max(int(round(seg.outline)), 1)
+    # redraw the outline along the new silhouette inside the holes and along the sleeve cuts
     edge = new_body & ~erode(new_body, ow)
-    redraw = edge & hole
+    redraw = edge & (hole | dilate(remove, ow + 1))
     out[redraw, :3] = seg.outline_color
     out[~new_body] = 0
     return out
 
 
+def sleeve_axis(mask):
+    """Shoulder (upper end) and wrist (lower end) of a sleeve mask along its main axis."""
+    ys, xs = np.nonzero(mask)
+    pts = np.stack([xs, ys], 1).astype(np.float64)
+    m = pts.mean(0)
+    w, v = np.linalg.eigh(np.cov((pts - m).T)) if len(pts) > 2 else (None, np.eye(2))
+    d = v[:, -1]
+    if d[1] < 0:
+        d = -d                       # point downwards: shoulder first
+    t = (pts - m) @ d
+    return m + d * np.percentile(t, 4), m + d * np.percentile(t, 96)
+
+
 def build(rgba, seg):
     lab = seg.labels
+    ow = max(int(round(seg.outline)), 1)
     scythe = complete_handle(cut(rgba, lab == SCYTHE), seg)
-    return Layers(
-        head=cut(rgba, lab == HEAD),
-        body=complete_body(rgba, seg),
-        back_hand=cut(rgba, lab == BACK_HAND),
-        front_hand=cut(rgba, lab == FRONT_HAND),
-        scythe=scythe,
-    )
+    empty = np.zeros(lab.shape, bool)
+    front = seg.front_band if seg.front_band is not None else empty
+    back = seg.back_band if seg.back_band is not None else empty
+    # one LaMa pass colours the holes of both robe variants
+    body_n, hole_n = body_holes(seg, back)
+    _, hole_r = body_holes(seg, back | front)
+    med = np.median(rgba[..., :3][body_n & (dist_to(~body_n) > 3)], 0) if body_n.sum() > 50 else np.array([128, 128, 128])
+    base = np.where(body_n[..., None], rgba[..., :3], med.astype(np.uint8)).astype(np.uint8)
+    filled = inpaint.fill(base, hole_n | hole_r)
+    body = complete_body(rgba, seg, back, filled)
+    body_raised = complete_body(rgba, seg, back | front, filled) if front.any() else body
+    rest = (lab == BODY) & ~front & ~back
+    back_hand = cut(rgba, lab == BACK_HAND)
+    outline_cut(back_hand, lab == BACK_HAND, rest, ow, seg.outline_color)
+    sleeve = cut(rgba, front)
+    if front.any():
+        outline_cut(sleeve, front, rest, ow, seg.outline_color)
+        axis = sleeve_axis(front)
+    else:
+        axis = None
+    return Layers(head=cut(rgba, lab == HEAD), body=body, body_raised=body_raised, back_hand=back_hand,
+                  front_hand=cut(rgba, lab == FRONT_HAND), scythe=scythe, sleeve=sleeve, sleeve_axis=axis)
 
 
-def sleeve_sprite(body_layer, seg, shoulder, wrist, radius, shape):
-    """Raised front sleeve: a tube from shoulder to wrist textured with the robe and outlined."""
+def sleeve_tube(body_layer, seg, sleeve_axis, shoulder, wrist, radius, shape):
+    """Lifted front sleeve, shaped like the black reaper's (a thick tube from shoulder to wrist)
+    and dressed in the skin's own robe: the fur next to the hanging sleeve is copied onto
+    it unstretched, then the skin's outline goes round it."""
     H, W = shape[:2]
     out = np.zeros((H, W, 4), np.uint8)
-    v = np.asarray(wrist, float) - np.asarray(shoulder, float)
+    shoulder = np.asarray(shoulder, float)
+    wrist = np.asarray(wrist, float)
+    v = wrist - shoulder
     length = float(np.linalg.norm(v))
     if length < 1:
         return out
     ow = max(int(round(seg.outline)), 1)
-    r = int(round(radius))
+    r = max(int(round(radius)), ow + 2)
     mask = np.zeros((H, W), np.uint8)
-    cv2.line(mask, tuple(int(round(c)) for c in shoulder), tuple(int(round(c)) for c in wrist), 1, 2 * r)
-    cv2.circle(mask, tuple(int(round(c)) for c in shoulder), r, 1, -1)
+    p0 = tuple(int(round(c)) for c in shoulder)
+    p1 = tuple(int(round(c)) for c in wrist)
+    cv2.line(mask, p0, p1, 1, 2 * r)
+    cv2.circle(mask, p0, r, 1, -1)
+    cv2.circle(mask, p1, r, 1, -1)
     mask = mask.astype(bool)
     inner = erode(mask, ow)
-    # texture: sample the robe along a vertical strip next to the shoulder
+    # texture source: robe just inside the hanging sleeve, running down from the shoulder
     body_a = body_layer[..., 3] > 200
-    ys, xs = np.nonzero(body_a & (dist_to(~body_a) > r + 2))
-    if len(xs) == 0:
-        col = np.median(body_layer[..., :3][body_a], 0) if body_a.any() else np.array([128, 128, 128])
-        out[inner, :3] = col.astype(np.uint8)
+    deep = body_a & (dist_to(~body_a) > ow + 2)
+    if sleeve_axis is not None and deep.any():
+        s0, s1 = (np.asarray(p, float) for p in sleeve_axis)
+        ys, xs = np.nonzero(deep)
+        pts = np.stack([xs, ys], 1).astype(float)
+        mid = (s0 + s1) / 2
+        src = pts[np.argmin(((pts - mid) ** 2).sum(1))]          # nearest robe pixel to the sleeve
+        dn = s1 - s0
+        dn = dn / (np.linalg.norm(dn) + 1e-6)
+    elif deep.any():
+        ys, xs = np.nonzero(deep)
+        src = np.array([np.median(xs), np.median(ys)], float)
+        dn = np.array([0.0, 1.0])
     else:
-        src_c = np.array([np.median(xs), np.median(ys)])
-        e = v / length
-        nrm = np.array([-e[1], e[0]])
-        gy, gx = np.mgrid[0:H, 0:W].astype(np.float32)
-        rx = gx - shoulder[0]; ry = gy - shoulder[1]
-        along = rx * e[0] + ry * e[1]
-        across = rx * nrm[0] + ry * nrm[1]
-        # map the tube to a vertical strip of the robe centred at src_c
-        mx = (src_c[0] + across).astype(np.float32)
-        my = (src_c[1] - length / 2 + along).astype(np.float32)
-        smp = cv2.remap(body_layer, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-        out[inner, :3] = smp[inner, :3]
+        out[inner, :3] = seg.outline_color
+        out[mask, 3] = 255
+        return out
+    e = v / length
+    ne = np.array([-e[1], e[0]])
+    nd = np.array([-dn[1], dn[0]])
+    gy, gx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rx, ry = gx - shoulder[0], gy - shoulder[1]
+    along = rx * e[0] + ry * e[1] - length / 2
+    across = rx * ne[0] + ry * ne[1]
+    mx = (src[0] + along * dn[0] + across * nd[0]).astype(np.float32)
+    my = (src[1] + along * dn[1] + across * nd[1]).astype(np.float32)
+    tex = body_layer.copy()
+    tex[..., :3][~body_a] = np.median(body_layer[..., :3][deep], 0).astype(np.uint8)
+    smp = cv2.remap(tex, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+    out[inner, :3] = smp[inner, :3]
     out[mask & ~inner, :3] = seg.outline_color
     out[mask, 3] = 255
     return out
+

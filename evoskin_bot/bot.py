@@ -2,17 +2,24 @@
 
 Env:  BOT_TOKEN (or TELEGRAM_BOT_TOKEN) is required and is read only from the environment.
       MODELS_DIR (LaMa inpainting model is downloaded there on first start), LOG_LEVEL,
-      EVOSKIN_LAMA=0 turns LaMa off for hosts with less than ~1 GB of RAM.
+      EVOSKIN_THREADS (2) CPU threads per job, JOB_TIMEOUT (480 s), STATE_DIR (/data/state).
+
+Every job runs in its own process (python -m evoskin.worker): when it runs out of memory or
+time it is retried once without LaMa, and the bot itself never goes down with it.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
 import re
+import shutil
 import sys
+import tempfile
+from pathlib import Path
 
 os.environ.setdefault("OPENCV_IO_MAX_IMAGE_PIXELS", str(50_000_000))   # refuse decompression bombs
 
@@ -21,34 +28,39 @@ from aiogram.client.default import DefaultBotProperties  # noqa: E402
 from aiogram.filters import Command, CommandStart  # noqa: E402
 from aiogram.types import BotCommand, BufferedInputFile, Message  # noqa: E402
 
-from evoskin import inpaint, pipeline  # noqa: E402
+from evoskin import inpaint  # noqa: E402
 
 log = logging.getLogger("evoskin_bot")
 
 TG_DOWNLOAD_LIMIT = 20 * 1024 * 1024          # Bot API getFile limit
 UPLOAD_TIMEOUT = 300
 MAX_PER_USER = 3
+JOB_TIMEOUT = float(os.environ.get("JOB_TIMEOUT", 480))
+STATE_DIR = Path(os.environ.get("STATE_DIR", "/data/state"))
+ROOT = Path(__file__).resolve().parent
 _TOKEN_RE = re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{30,}\b")
 
 TXT = {
     "start": ("Сәлем! Маған reaper скинін жібер (black reaper сияқты стандарт қалыпта, орағы қолында) — "
-              "black reaper-дегідей анимация кадрларын жасап беремін:\n"
+              "black reaper-дегідей кадрларын жасап беремін:\n"
               "• idle — 6 кадр\n• fly — 5 кадр\n• attack — 8 кадр\n\n"
               "Бас, дене (құйрығымен бірге), екі қол және орақ бөлек қозғалады; қол мен орақ ашқан жерлер "
               "скиннің өз түсімен толтырылады.\n"
               "Ең жақсы нәтиже үшін скинді <b>файл</b> ретінде жібер (мөлдір фонды PNG).\n\n"
               "Привет! Пришли скин жнеца в стандартной позе — верну кадры idle / fly / attack как у black reaper."),
     "queued": "⏳ Кезекте: {pos}. / В очереди: {pos}.",
-    "work": "🎨 Скинді бөліктерге бөліп, 19 кадр жасап жатырмын… ~1 мин",
+    "work": "🎨 Скинді бөліктерге бөліп, 19 кадр жасап жатырмын… ~1–2 мин",
     "too_big": "Файл тым үлкен ({mb:.1f} МБ). 20 МБ-қа дейін жібер.",
     "busy_user": "Сенің {n} скиның кезекте тұр — солар біткен соң жібер.",
     "bad_image": "Бұл суретті аша алмадым (PNG/JPG/WEBP жібер).",
     "no_skull": ("⚠️ Скиннен бас сүйекті таба алмадым — кадрлар қисық шығуы мүмкін. "
                  "Скин black reaper сияқты стандарт қалыпта болуы керек."),
     "done": ("✅ Дайын: idle 6, fly 5, attack 8 кадр ({w}×{h}).\n"
-             "ZIP ішінде: frames/ — мөлдір PNG кадрлар, layers/ — бөлек қабаттар, preview/ — GIF."),
+             "ZIP ішінде: frames/ — мөлдір PNG кадрлар, layers/ — бөлек қабаттар."),
     "fail": "😔 Өңдеу кезінде қате шықты. Басқа файлмен қайталап көр.",
+    "slow": "⏳ Жады жетпеді — жеңіл режимде қайталап жатырмын…",
     "restart": "Бот қайта іске қосылып жатыр — скинді қайта жібер.",
+    "lost": "Бот қайта іске қосылды, бұл скин өңделмей қалды — қайта жібер.",
     "unsupported": "Скин суретін жібер (PNG файл ретінде жақсырақ).",
     "compressed": "💡 Келесі жолы скинді «Файл» ретінде жібер — Telegram фотоны сығып, шеттерін бұзады.",
 }
@@ -120,15 +132,68 @@ async def on_start(message: Message) -> None:
     await message.answer(TXT["start"])
 
 
-async def send_result(message: Message, res: pipeline.Result) -> None:
-    w, h = res.frames[0][1].shape[1], res.frames[0][1].shape[0]
-    await message.bot(message.answer_photo(BufferedInputFile(res.sheet, "frames.png")),
+class JobFailed(Exception):
+    pass
+
+
+async def run_worker(data: bytes, lama: bool) -> dict:
+    """Run the pipeline in a child process; returns the output files as bytes."""
+    tmp = Path(tempfile.mkdtemp(prefix="skin_"))
+    try:
+        src = tmp / "in.bin"
+        src.write_bytes(data)
+        env = dict(os.environ, EVOSKIN_LAMA="1" if lama else "0")
+        proc = await asyncio.create_subprocess_exec(sys.executable, "-m", "evoskin.worker", str(src), str(tmp / "out"),
+                                                    cwd=str(ROOT), env=env)
+        try:
+            rc = await asyncio.wait_for(proc.wait(), timeout=JOB_TIMEOUT)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise JobFailed("timeout")
+        if rc == 3:
+            raise ValueError("not an image")
+        if rc != 0:
+            raise JobFailed(f"worker exit {rc}")
+        out = tmp / "out"
+        return dict(zip=(out / "frames.zip").read_bytes(), sheet=(out / "sheet.png").read_bytes(),
+                    info=json.loads((out / "info.json").read_text()))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _pending_path(message: Message, status: Message) -> Path:
+    return STATE_DIR / f"{message.chat.id}_{status.message_id}.json"
+
+
+def mark_pending(message: Message, status: Message) -> Path | None:
+    with contextlib.suppress(Exception):
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        p = _pending_path(message, status)
+        p.write_text(json.dumps({"chat": message.chat.id, "status": status.message_id}))
+        return p
+    return None
+
+
+async def notify_lost_jobs(bot: Bot) -> None:
+    """Jobs that were running when the container restarted get an honest message."""
+    if not STATE_DIR.exists():
+        return
+    for p in STATE_DIR.glob("*.json"):
+        with contextlib.suppress(Exception):
+            d = json.loads(p.read_text())
+            with contextlib.suppress(Exception):
+                await bot.edit_message_text(TXT["lost"], chat_id=d["chat"], message_id=d["status"])
+        with contextlib.suppress(Exception):
+            p.unlink()
+
+
+async def send_result(message: Message, res: dict) -> None:
+    info = res["info"]
+    await message.bot(message.answer_photo(BufferedInputFile(res["sheet"], "frames.png")),
                       request_timeout=UPLOAD_TIMEOUT)
-    for anim in ("idle", "fly", "attack"):
-        await message.bot(message.answer_animation(BufferedInputFile(res.gifs[anim], f"{anim}.gif"), caption=anim),
-                          request_timeout=UPLOAD_TIMEOUT)
-    await message.bot(message.answer_document(BufferedInputFile(res.zip_bytes, "skin_frames.zip"),
-                                              caption=TXT["done"].format(w=w, h=h)),
+    await message.bot(message.answer_document(BufferedInputFile(res["zip"], "skin_frames.zip"),
+                                              caption=TXT["done"].format(w=info["width"], h=info["height"])),
                       request_timeout=UPLOAD_TIMEOUT)
 
 
@@ -139,21 +204,29 @@ async def handle_skin(message: Message, bot: Bot, file_id: str, size: int | None
 
     async def job() -> None:
         status = None
+        pending = None
         try:
             status = await message.answer(TXT["work"])
+            pending = mark_pending(message, status)
             buf = await bot.download(file_id, timeout=120)
             data = buf.read()
             try:
-                res = await asyncio.to_thread(pipeline.run, data)
+                try:
+                    res = await run_worker(data, lama=True)
+                except JobFailed as e:
+                    log.warning("job failed (%s), retrying without LaMa", e)
+                    with contextlib.suppress(Exception):
+                        await status.edit_text(TXT["slow"])
+                    res = await run_worker(data, lama=False)
             except ValueError:
                 await status.edit_text(TXT["bad_image"])
                 return
-            if not res.info.get("skull_found", True):
+            if not res["info"].get("skull_found", True):
                 await message.answer(TXT["no_skull"])
             await send_result(message, res)
             if compressed:
                 await message.answer(TXT["compressed"])
-            log.info("skin done in %.1fs %s", res.seconds, res.info)
+            log.info("skin done %s", res["info"])
             with contextlib.suppress(Exception):
                 await status.delete()
         except asyncio.CancelledError:
@@ -165,6 +238,10 @@ async def handle_skin(message: Message, bot: Bot, file_id: str, size: int | None
             if status:
                 with contextlib.suppress(Exception):
                     await status.edit_text(TXT["fail"])
+        finally:
+            if pending is not None:
+                with contextlib.suppress(Exception):
+                    pending.unlink()
 
     await worker.run(message.from_user.id, message, job)
 
@@ -201,8 +278,9 @@ async def main() -> None:
         log.error("BOT_TOKEN is not set")
         sys.exit(2)
     log.info("preparing models…")
-    await asyncio.to_thread(inpaint.warm)
+    await asyncio.to_thread(inpaint.ensure_model)      # download only; jobs load it in their own process
     bot = Bot(token, default=DefaultBotProperties(parse_mode="HTML", allow_sending_without_reply=True))
+    await notify_lost_jobs(bot)
     await bot.set_my_commands([BotCommand(command="start", description="Бастау / Начать"),
                                BotCommand(command="help", description="Көмек / Помощь")])
     log.info("bot started")

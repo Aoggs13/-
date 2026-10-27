@@ -7,14 +7,12 @@ import numpy as np
 
 from . import animate, imageio, inpaint, layers as lay, segment
 
-GIF_MS = {"idle": 110, "fly": 80, "attack": 75}
 MAX_SIDE = 1100          # working size cap (px); keeps a job under ~0.7 GB of RAM
 
 
 @dataclass
 class Result:
     frames: list          # [(filename, BGRA)] in animation order
-    gifs: dict            # anim -> GIF bytes
     zip_bytes: bytes
     sheet: bytes          # PNG contact sheet
     seconds: float
@@ -61,27 +59,16 @@ def run(data: bytes) -> Result:
     seg = segment.segment(rgba)
     L = lay.build(rgba, seg)
     inpaint.release()
-    H, W = rgba.shape[:2]
-    pad = int(0.5 * max(H, W))
-    frames = animate.render(L, seg, (H + 2 * pad, W + 2 * pad), (pad, pad))
-    frames = animate.crop_frames(frames, 6)
+    frames = animate.crop_frames(animate.render(L, seg), 6)
     seqs = animate.sequences()
     named = []
-    gifs = {}
     for anim in ("idle", "fly", "attack"):
-        seq = seqs[anim]
-        for i, src in enumerate(seq):
+        for i, src in enumerate(seqs[anim]):
             named.append(("%s_%d.png" % (anim, i + 1), frames[src]))
-        order = [frames[s] for s in seq]
-        if anim in ("idle", "fly"):
-            order = order + order[-2:0:-1]      # ping-pong loop
-        gifs[anim] = animate.gif_bytes(order, GIF_MS[anim])
     files = [("frames/" + n, animate.png_bytes(f)) for n, f in named]
-    for p in animate.PARTS:
+    for p in animate.PARTS + ["sleeve"]:
         files.append(("layers/%s.png" % p, animate.png_bytes(L.get(p))))
-    for anim, g in gifs.items():
-        files.append(("preview/%s.gif" % anim, g))
     info = dict(scale=round(seg.scale, 3), scythe_in_front=seg.scythe_in_front, skull_found=seg.skull is not None,
                 ref_frame=animate.pick_ref_frame(seg), size=list(named[0][1].shape[1::-1]))
-    return Result(frames=named, gifs=gifs, zip_bytes=animate.make_zip(files),
+    return Result(frames=named, zip_bytes=animate.make_zip(files),
                   sheet=contact_sheet(named), seconds=time.time() - t0, info=info)
