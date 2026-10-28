@@ -1,0 +1,38 @@
+# ZhubiSlide
+
+Website that turns a topic into a designed PowerPoint deck (5–25 slides, Kazakh or Russian).
+
+- **Topic-matched design** ("Авто"): Claude picks the palette, ornament and font for the topic; colours are
+  corrected server-side so text is always readable. 7 preset themes and 8 fonts (Times New Roman, Arial,
+  Calibri, Cambria, Segoe UI, Verdana, Tahoma, Courier New) can be chosen instead — also after generation.
+- **Full, understandable text**: lead sentence + explanatory bullets; three text amounts. Every text box is
+  fitted (simulated word wrap) so long text stays inside the design.
+- **Real time estimate**: shown per slide count before starting, learned from real runs (stored in
+  `/data/stats.json`); during generation the countdown is re-estimated from the observed speed.
+- Photos per slide from Openverse / Wikimedia Commons (or Pexels / Unsplash if a key is set), fetched while the
+  text is still being written; speaker notes; PPTX download; in-browser preview of every slide.
+
+## Run locally
+```bash
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=...        # never commit it
+uvicorn app.main:app --reload
+python -m pytest -q tests           # 32 tests, no network needed
+```
+
+## Environment
+| Variable | Default | |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | — | **required**, set it in Railway → Variables |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | |
+| `CLAUDE_EFFORT` | `low` | `low` / `medium` / `high` |
+| `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY` | — | optional, better photos |
+| `DATA_DIR` | `/data` in Docker | mount a Railway volume here |
+| `RATE_LIMIT_PER_HOUR` | `12` | decks per IP per hour |
+| `MAX_PARALLEL` | `3` | decks generated at the same time |
+| `SLIDES_PER_BATCH`, `BATCHES_PARALLEL` | `4`, `4` | parallel text generation |
+| `KEEP_DAYS` | `14` | how long decks are kept |
+
+## Railway
+Service from this repo with **Root Directory = `zhubislide`** (Dockerfile builder, see `railway.json`),
+a volume mounted at `/data`, variable `ANTHROPIC_API_KEY`, and a generated domain.

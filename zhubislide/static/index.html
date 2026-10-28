@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="kk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ZhubiSlide — ИИ презентация генераторы</title>
+  <meta name="description" content="Тақырыпты жаз — ZhubiSlide 5–25 беттік әдемі презентацияны қазақша не орысша жасап береді: тақырыпқа сай дизайн, суреттер, толық мәтін, PPTX.">
+  <meta name="theme-color" content="#07071a">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css?v=2">
+</head>
+<body>
+<div class="bg-mesh"><span></span><span></span><span></span></div>
+<div class="bg-grid"></div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="#"><img src="/favicon.svg" alt=""><span>Zhubi<b>Slide</b></span></a>
+    <nav class="nav" id="nav">
+      <a href="#create" data-i18n="nav_create"></a>
+      <a href="#designs" data-i18n="nav_designs"></a>
+      <a href="#works" data-i18n="nav_works"></a>
+      <a href="#how" data-i18n="nav_how"></a>
+      <a href="#faq" data-i18n="nav_faq"></a>
+      <div class="lang-switch"><button data-ui="kk">ҚАЗ</button><button data-ui="ru">РУС</button></div>
+    </nav>
+    <div class="lang-switch desk"><button data-ui="kk">ҚАЗ</button><button data-ui="ru">РУС</button></div>
+    <button class="burger" id="burger" aria-label="menu"><span></span><span></span><span></span></button>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="create">
+    <div class="wrap">
+      <div class="badge"><i></i><span data-i18n="badge"></span></div>
+      <h1 data-i18n-html="h1"></h1>
+      <p class="sub" data-i18n="sub"></p>
+      <div class="hero-facts">
+        <span data-i18n-html="f1"></span><span data-i18n-html="f2"></span><span data-i18n-html="f3"></span><span data-i18n-html="f4"></span>
+      </div>
+
+      <div class="studio">
+        <!-- 1. form -->
+        <div class="pane on" id="pane-form">
+          <div id="form-alert"></div>
+          <div class="form-grid">
+            <div>
+              <div class="field">
+                <label for="topic"><span><span class="num">1</span><span data-i18n="topic"></span></span><small id="topic-count">0 / 300</small></label>
+                <textarea id="topic" maxlength="300" data-i18n-ph="topic_ph"></textarea>
+                <div class="examples" id="examples"></div>
+              </div>
+              <div class="field">
+                <div class="label"><span><span class="num">2</span><span data-i18n="pages"></span></span><small data-i18n="pages_hint"></small></div>
+                <div class="chips pages" id="pages"></div>
+              </div>
+              <div class="field">
+                <div class="label"><span><span class="num">3</span><span data-i18n="slang"></span></span></div>
+                <div class="chips two" id="slang">
+                  <button class="chip row" data-v="kk"><span class="flag">🇰🇿</span>Қазақша</button>
+                  <button class="chip row" data-v="ru"><span class="flag">🇷🇺</span>Русский</button>
+                </div>
+              </div>
+              <div class="field">
+                <div class="label"><span><span class="num">4</span><span data-i18n="density"></span></span></div>
+                <div class="chips three" id="density">
+                  <button class="chip" data-v="medium"><b data-i18n="d_medium"></b><small data-i18n="d_medium_s"></small></button>
+                  <button class="chip" data-v="long"><b data-i18n="d_long"></b><small data-i18n="d_long_s"></small></button>
+                  <button class="chip" data-v="full"><b data-i18n="d_full"></b><small data-i18n="d_full_s"></small></button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="field">
+                <div class="label"><span><span class="num">5</span><span data-i18n="design"></span></span><small data-i18n="design_hint"></small></div>
+                <div class="themes" id="themes"></div>
+              </div>
+              <div class="field">
+                <div class="label"><span><span class="num">6</span><span data-i18n="font"></span></span></div>
+                <div class="fonts" id="fonts"></div>
+              </div>
+
+              <details class="more" id="more">
+                <summary>⚙️ <span data-i18n="more"></span><span class="chev">▾</span></summary>
+                <div class="in">
+                  <div>
+                    <div class="label" data-i18n="tone"></div>
+                    <div class="tones" id="tones"></div>
+                  </div>
+                  <div>
+                    <label class="toggle"><span><span data-i18n="photos"></span><small data-i18n="photos_s"></small></span>
+                      <span class="switch"><input type="checkbox" id="photos" checked><i></i></span></label>
+                    <label class="toggle"><span><span data-i18n="notes"></span><small data-i18n="notes_s"></small></span>
+                      <span class="switch"><input type="checkbox" id="notes" checked><i></i></span></label>
+                  </div>
+                  <div>
+                    <div class="label"><span data-i18n="author"></span></div>
+                    <input type="text" id="author" maxlength="80" data-i18n-ph="author_ph">
+                  </div>
+                  <div>
+                    <div class="label"><span data-i18n="extra"></span></div>
+                    <textarea id="extra" rows="2" maxlength="500" data-i18n-ph="extra_ph"></textarea>
+                  </div>
+                </div>
+              </details>
+
+            </div>
+          </div>
+          <div class="go-row">
+            <div class="eta-box">
+              <div class="clock">⏱</div>
+              <div>
+                <div class="t" data-i18n="eta_t"></div>
+                <div class="v" id="eta-v">—</div>
+                <div class="parts" id="eta-parts"></div>
+              </div>
+            </div>
+            <div>
+              <button class="btn primary" id="go">✨ <span data-i18n="go"></span></button>
+              <div class="hint" id="eta-hint"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. progress -->
+        <div class="pane" id="pane-progress">
+          <div class="progress-wrap">
+            <div>
+              <div class="ring">
+                <svg viewBox="0 0 120 120">
+                  <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs>
+                  <circle class="track" cx="60" cy="60" r="52"/>
+                  <circle class="bar" id="ring-bar" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+                </svg>
+                <div class="center"><div class="pct" id="pct">0%</div><div class="lbl" id="stage-lbl"></div></div>
+              </div>
+              <div class="timer">
+                <div class="left"><small data-i18n="left"></small><b id="t-left">0:00</b></div>
+                <div><small data-i18n="elapsed"></small><b id="t-el">0:00</b></div>
+              </div>
+            </div>
+            <div>
+              <h2 class="p-title" id="p-title"></h2>
+              <p class="p-sub" id="p-sub"></p>
+              <div class="queue-note" id="queue-note"></div>
+              <ol class="stages" id="stages">
+                <li data-s="outline"><i>1</i><span data-i18n="st_outline"></span></li>
+                <li data-s="writing"><i>2</i><span data-i18n="st_writing"></span></li>
+                <li data-s="images"><i>3</i><span data-i18n="st_images"></span></li>
+                <li data-s="design"><i>4</i><span data-i18n="st_design"></span></li>
+              </ol>
+              <div class="design-pick" id="design-pick"><div class="dots" id="pick-dots"></div><span id="pick-text"></span></div>
+              <ul class="titles" id="titles"></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. result -->
+        <div class="pane" id="pane-result">
+          <div class="result-head">
+            <div>
+              <h2 id="r-title"></h2>
+              <div class="meta" id="r-meta"></div>
+            </div>
+            <button class="btn ghost small" id="new-btn">＋ <span data-i18n="new"></span></button>
+          </div>
+          <div class="result-grid">
+            <div>
+              <div class="viewer">
+                <button class="nav-btn prev" id="prev" aria-label="prev">‹</button>
+                <div class="stage" id="stage"></div>
+                <button class="nav-btn next" id="next" aria-label="next">›</button>
+                <div class="counter" id="counter"></div>
+              </div>
+              <div class="thumbs" id="thumbs"></div>
+              <div class="notes-box" id="notes-box" hidden><b data-i18n="speaker"></b><span id="notes-text"></span></div>
+            </div>
+            <div class="side">
+              <a class="btn primary dl" id="dl" href="#">⬇ <span data-i18n="download"></span></a>
+              <div class="box">
+                <h4 data-i18n="r_design"></h4>
+                <div class="themes" id="r-themes"></div>
+              </div>
+              <div class="box">
+                <h4 data-i18n="r_font"></h4>
+                <select id="r-font"></select>
+              </div>
+              <div class="box">
+                <h4 data-i18n="share"></h4>
+                <button class="btn ghost small" id="copy" style="width:100%">🔗 <span data-i18n="copy"></span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="designs">
+    <div class="wrap">
+      <h2 class="t" data-i18n="designs_t"></h2>
+      <p class="st" data-i18n="designs_s"></p>
+      <div class="auto-explain" id="auto-explain"></div>
+      <div class="gallery" id="gallery" style="margin-top:18px"></div>
+    </div>
+  </section>
+
+  <section class="block" id="works">
+    <div class="wrap">
+      <h2 class="t" data-i18n="works_t"></h2>
+      <p class="st" data-i18n="works_s"></p>
+      <div class="works" id="works-list"></div>
+    </div>
+  </section>
+
+  <section class="block" id="how">
+    <div class="wrap">
+      <h2 class="t" data-i18n="how_t"></h2>
+      <p class="st" data-i18n="how_s"></p>
+      <div class="steps">
+        <div><h3 data-i18n="s1"></h3><p data-i18n="s1p"></p></div>
+        <div><h3 data-i18n="s2"></h3><p data-i18n="s2p"></p></div>
+        <div><h3 data-i18n="s3"></h3><p data-i18n="s3p"></p></div>
+        <div><h3 data-i18n="s4"></h3><p data-i18n="s4p"></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="faq">
+    <div class="wrap">
+      <h2 class="t" data-i18n="faq_t"></h2>
+      <div class="faq" id="faq-list"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© <span id="year"></span> ZhubiSlide</span>
+    <span data-i18n="foot"></span>
+  </div>
+</footer>
+<div class="toast" id="toast"></div>
+<script src="/app.js?v=2"></script>
+</body>
+</html>
