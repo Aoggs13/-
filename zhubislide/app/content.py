@@ -212,7 +212,7 @@ async def gemini_candidates() -> list[str]:
     if GEMINI_MODEL:
         return [GEMINI_MODEL]
     ids = await _list_models("gemini")
-    order = [*_newest(ids, _GEMINI_FLASH), "gemini-flash-latest", *_newest(ids, _GEMINI_LITE), "gemini-flash-lite-latest"]
+    order = [*_newest(ids, _GEMINI_FLASH), *_newest(ids, _GEMINI_LITE), "gemini-flash-latest", "gemini-flash-lite-latest"]
     order = [m for m in dict.fromkeys(order) if m in ids]
     last = _models.get("gemini")                         # the model that worked last goes first
     if last in order:
@@ -340,7 +340,7 @@ async def _stream_gemini(system: str, prompt: str, schema: dict,
         except (openai.InternalServerError, openai.APITimeoutError, openai.APIConnectionError,
                 openai.NotFoundError) as e:
             error = e
-            _skip(model, 1800, type(e).__name__)
+            _skip(model, 7200, type(e).__name__)              # overloaded / not served yet: try again later
     if isinstance(error, openai.RateLimitError) or (error is None and _bad):
         raise DailyLimit("all free Gemini models used up today's limit")
     raise error or RuntimeError("no gemini model")
