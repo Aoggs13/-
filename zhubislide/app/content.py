@@ -110,16 +110,45 @@ LAYOUT_GUIDE = """Layouts:
 Use at least 3 different layouts when there are 5+ slides; never the same layout 3 times in a row."""
 
 
+PROVIDERS = ("anthropic", "openai", "gemini")
+_KEYS = {"anthropic": ("ANTHROPIC_API_KEY",), "openai": ("OPENAI_API_KEY",),
+         "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
+GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai/"   # Gemini's OpenAI-compatible API
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "")
+
+
+def _key(p: str) -> str:
+    return next((os.environ[k] for k in _KEYS[p] if os.environ.get(k)), "")
+
+
+def configured() -> list[str]:
+    """Providers that have an API key, AI_PROVIDER first."""
+    order = list(PROVIDERS)
+    pref = os.environ.get("AI_PROVIDER", "").strip().lower()
+    if pref in order:
+        order.remove(pref)
+        order.insert(0, pref)
+    return [p for p in order if _key(p)]
+
+
+_active = ""   # set by self_check(): the first provider whose key and balance actually work
+
+
 def provider() -> str:
-    """"anthropic" or "openai": AI_PROVIDER if set, otherwise whichever API key exists ("" when none)."""
-    p = os.environ.get("AI_PROVIDER", "").strip().lower()
-    if p in ("anthropic", "openai"):
-        return p
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return "anthropic"
-    if os.environ.get("OPENAI_API_KEY"):
-        return "openai"
-    return ""
+    """Provider used for generation ("" when no key is set)."""
+    if _active:
+        return _active
+    found = configured()
+    return found[0] if found else ""
+
+
+def batch_size() -> int:
+    # Gemini's free tier allows few requests per minute: fewer, bigger requests
+    return max(BATCH, 6) if provider() == "gemini" else BATCH
+
+
+def parallel() -> int:
+    return min(PARALLEL, 2) if provider() == "gemini" else PARALLEL
 
 
 # result of the startup check, shown by /api/meta so the page can explain a missing key or empty balance
@@ -130,53 +159,77 @@ def _client() -> anthropic.AsyncAnthropic:
     return anthropic.AsyncAnthropic(max_retries=3)
 
 
-def _openai_client() -> openai.AsyncOpenAI:
+def _openai_client(p: str = "openai") -> openai.AsyncOpenAI:
+    if p == "gemini":
+        return openai.AsyncOpenAI(api_key=_key("gemini"), base_url=GEMINI_BASE, max_retries=3)
     return openai.AsyncOpenAI(max_retries=3)
 
 
-_VERSIONED = re.compile(r"^gpt-(\d+)(?:\.(\d+))?$")
-_openai_model = ""
+_GPT = re.compile(r"^gpt-(\d+)(?:\.(\d+))?$")
+_GEMINI_FLASH = re.compile(r"^gemini-(\d+)(?:\.(\d+))?-flash$")
+_models: dict[str, str] = {}
 _model_lock = asyncio.Lock()
 
 
-async def openai_model() -> str:
-    """OPENAI_MODEL, or the newest flagship GPT model this key can use (gpt-5.2 > gpt-5.1 > gpt-5 > gpt-4.1 …)."""
-    global _openai_model
-    if OPENAI_MODEL:
-        return OPENAI_MODEL
+def _newest(ids: set[str], pattern: re.Pattern) -> list[str]:
+    return sorted((m for m in ids if pattern.match(m)),
+                  key=lambda m: tuple(int(x or 0) for x in pattern.match(m).groups()), reverse=True)
+
+
+async def model_for(p: str) -> str:
+    """Env override, or the newest suitable model the key can use: flagship gpt-N.M / gemini-N.M-flash."""
+    override = OPENAI_MODEL if p == "openai" else GEMINI_MODEL
+    if override:
+        return override
     async with _model_lock:
-        if not _openai_model:
-            ids = {m.id async for m in _openai_client().models.list()}
-            flagship = sorted((m for m in ids if _VERSIONED.match(m)),
-                              key=lambda m: tuple(int(x or 0) for x in _VERSIONED.match(m).groups()), reverse=True)
-            fallback = [m for m in ("gpt-4o", "gpt-4o-mini") if m in ids]
-            _openai_model = (flagship + fallback + ["gpt-4o-mini"])[0]
-            log.info("OpenAI model: %s", _openai_model)
-    return _openai_model
+        if p not in _models:
+            ids = {m.id.removeprefix("models/") async for m in _openai_client(p).models.list()}
+            if p == "openai":
+                found = _newest(ids, _GPT) + [m for m in ("gpt-4o", "gpt-4o-mini") if m in ids] + ["gpt-4o-mini"]
+            else:
+                found = _newest(ids, _GEMINI_FLASH) + ["gemini-2.5-flash"]
+            _models[p] = found[0]
+            log.info("%s model: %s", p, _models[p])
+    return _models[p]
 
 
 def _reasoning(model: str) -> bool:
     return model.startswith(("gpt-5", "o1", "o3", "o4"))
 
 
-async def _stream_openai(system: str, prompt: str, schema: dict, on_text: Callable[[str], Awaitable[None]] | None,
-                         max_tokens: int) -> dict:
-    model = await openai_model()
+def _plain_schema(schema):
+    """Gemini's JSON-schema support is narrower: drop additionalProperties (every field is required anyway)."""
+    if isinstance(schema, dict):
+        return {k: _plain_schema(v) for k, v in schema.items() if k != "additionalProperties"}
+    if isinstance(schema, list):
+        return [_plain_schema(v) for v in schema]
+    return schema
+
+
+def _oa_params(p: str, model: str, max_tokens: int) -> dict:
+    if p == "gemini":
+        return {"max_tokens": max_tokens}
     extra = {"reasoning_effort": OPENAI_EFFORT} if _reasoning(model) else {}
-    stream = await _openai_client().chat.completions.create(
+    return {"max_completion_tokens": max_tokens, **extra}
+
+
+async def _stream_openai(p: str, system: str, prompt: str, schema: dict,
+                         on_text: Callable[[str], Awaitable[None]] | None, max_tokens: int) -> dict:
+    model = await model_for(p)
+    fmt = {"name": "deck", "schema": _plain_schema(schema) if p == "gemini" else schema, "strict": True}
+    stream = await _openai_client(p).chat.completions.create(
         model=model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-        response_format={"type": "json_schema", "json_schema": {"name": "deck", "schema": schema, "strict": True}},
-        max_completion_tokens=max_tokens,
+        response_format={"type": "json_schema", "json_schema": fmt},
         stream=True,
-        **extra,
+        **_oa_params(p, model, max_tokens),
     )
     text, finish = "", None
     async for chunk in stream:
         if not chunk.choices:
             continue
         choice = chunk.choices[0]
-        if choice.delta.refusal:
+        if getattr(choice.delta, "refusal", None):
             raise RuntimeError("refusal")
         if choice.delta.content:
             text += choice.delta.content
@@ -192,8 +245,9 @@ async def _stream_openai(system: str, prompt: str, schema: dict, on_text: Callab
 
 async def _stream_json(system: str, prompt: str, schema: dict, on_text: Callable[[str], Awaitable[None]] | None,
                        max_tokens: int) -> dict:
-    if provider() == "openai":
-        return await _stream_openai(system, prompt, schema, on_text, max_tokens)
+    p = provider()
+    if p in ("openai", "gemini"):
+        return await _stream_openai(p, system, prompt, schema, on_text, max_tokens)
     text = ""
     async with _client().beta.messages.stream(
         model=MODEL,
@@ -237,29 +291,39 @@ def error_code(e: Exception) -> str:
     return "failed"
 
 
+async def _check(p: str) -> str:
+    """A tiny request without retries; returns the model name or raises the provider's error."""
+    if p == "anthropic":
+        await _client().with_options(max_retries=0).messages.create(
+            model=MODEL, max_tokens=64, output_config={"effort": "low"},
+            messages=[{"role": "user", "content": "Reply with: OK"}])
+        return MODEL
+    model = await model_for(p)
+    await _openai_client(p).with_options(max_retries=0).chat.completions.create(
+        model=model, messages=[{"role": "user", "content": "Reply with: OK"}], **_oa_params(p, model, 64))
+    return model
+
+
 async def self_check() -> None:
-    """One tiny request at startup: tells (in the logs and on the page) whether the key and its balance work."""
-    p = provider()
-    STATUS.update(provider=p, ok=None, error="")
-    if not p:
-        STATUS.update(ok=False, error="not_configured")
-        return
-    try:
-        if p == "openai":
-            model = await openai_model()
-            extra = {"reasoning_effort": OPENAI_EFFORT} if _reasoning(model) else {}
-            await _openai_client().chat.completions.create(
-                model=model, messages=[{"role": "user", "content": "Reply with: OK"}],
-                max_completion_tokens=64, **extra)
-        else:
-            model = MODEL
-            await _client().messages.create(model=MODEL, max_tokens=64, output_config={"effort": "low"},
-                                            messages=[{"role": "user", "content": "Reply with: OK"}])
-        STATUS.update(model=model, ok=True)
+    """At startup: use the first provider whose key and balance work; report the problem if none does."""
+    global _active
+    _active = ""
+    failures = []
+    for p in configured():
+        try:
+            model = await _check(p)
+        except Exception as e:  # noqa: BLE001 - reported, never fatal
+            failures.append((p, error_code(e)))
+            log.error("AI check failed: provider=%s error=%s (%s)", p, failures[-1][1], type(e).__name__)
+            continue
+        _active = p
+        STATUS.update(provider=p, model=model, ok=True, error="")
         log.info("AI check ok: provider=%s model=%s", p, model)
-    except Exception as e:  # noqa: BLE001 - reported, never fatal
-        STATUS.update(ok=False, error=error_code(e))
-        log.error("AI check failed: provider=%s error=%s (%s)", p, STATUS["error"], type(e).__name__)
+        return
+    if not failures:
+        STATUS.update(provider="", model="", ok=False, error="not_configured")
+    else:
+        STATUS.update(provider=failures[0][0], model="", ok=False, error=failures[0][1])
 
 
 async def outline(topic: str, pages: int, lang: str, tone: str, extra: str) -> dict:
@@ -327,10 +391,11 @@ async def write_slides(topic: str, lang: str, tone: str, density: str, extra: st
                        on_batch: Callable[[list[int], list[dict]], Awaitable[None]] | None = None) -> list[dict]:
     """All content slides; batches run in parallel. on_progress(total slides finished so far)."""
     n = len(plan["plan"])
-    batches = [list(range(i, min(n, i + BATCH))) for i in range(0, n, BATCH)]
+    size = batch_size()
+    batches = [list(range(i, min(n, i + size))) for i in range(0, n, size)]
     started = [0] * len(batches)
     result: list[dict | None] = [None] * n
-    sem = asyncio.Semaphore(PARALLEL)
+    sem = asyncio.Semaphore(parallel())
     max_tokens = {"medium": 8000, "long": 12000, "full": 16000}.get(density, 12000)
 
     async def run(b: int, idxs: list[int]) -> None:

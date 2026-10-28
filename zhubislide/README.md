@@ -17,16 +17,16 @@ Website that turns a topic into a designed PowerPoint deck (5–25 slides, Kazak
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY; never commit it
 uvicorn app.main:app --reload
-python -m pytest -q tests           # 35 tests, no network needed
+python -m pytest -q tests           # 36 tests, no network needed
 ```
 
 ## Environment
 | Variable | Default | |
 |---|---|---|
-| `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | — | **one is required**, set it in Railway → Variables |
-| `AI_PROVIDER` | by key | `anthropic` / `openai` when both keys are set (Anthropic wins otherwise) |
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` | — | **at least one**, set in Railway → Variables. At startup a tiny request checks each key; the first one whose balance works is used (Anthropic → OpenAI → Gemini, or `AI_PROVIDER` first) |
 | `CLAUDE_MODEL`, `CLAUDE_EFFORT` | `claude-opus-5-5`, `low` | |
 | `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | newest `gpt-N.M` the key can use, `low` | |
+| `GEMINI_MODEL` | newest `gemini-N.M-flash` (free tier) | via Gemini's OpenAI-compatible API |
 | `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY` | — | optional, better photos |
 | `DATA_DIR` | `/data` in Docker | mount a Railway volume here |
 | `RATE_LIMIT_PER_HOUR` | `12` | decks per IP per hour |

@@ -26,4 +26,7 @@ Railway's GitHub app has no access to this repo, so the service runs image `pyth
 command that downloads a **pinned commit** tarball of this (public) repo, pip-installs and starts uvicorn
 (boot script is base64 in the start command). To ship a new version: push, then update the start command
 with the new commit SHA (`update-service startCommand`) — the service redeploys.
-Pending: user adds `ANTHROPIC_API_KEY` in the service Variables (never in chat/code).
+AI keys: any of ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY; the startup check picks the first that
+works and logs `AI check ok|failed`. OPENAI_API_KEY is set but its account has no API balance (429
+insufficient_quota). Claude Pro / ChatGPT Plus subscriptions do not include API usage.
+Pending: user tops up an API balance or adds a free GEMINI_API_KEY (never put keys in code/files/commits).

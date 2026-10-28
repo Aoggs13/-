@@ -60,9 +60,9 @@ def learn(key: str, value: float) -> None:
 
 def _rounds(n: int) -> tuple[int, int]:
     """(parallel rounds, slides per batch) for n content slides."""
-    k = min(content.BATCH, n)
-    batches = math.ceil(n / content.BATCH)
-    return math.ceil(batches / content.PARALLEL), k
+    size = content.batch_size()
+    k = min(size, n)
+    return math.ceil(math.ceil(n / size) / content.parallel()), k
 
 
 def writing_estimate(n: int, density: str) -> float:
