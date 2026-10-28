@@ -1,4 +1,4 @@
-"""Slide text generation with Claude.
+"""Slide text generation with Claude or OpenAI (whichever key is configured).
 
 Two phases so that long, detailed decks are still fast:
 1. outline  — design palette, title, and a plan (layout + title + focus) for every slide;
@@ -10,16 +10,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 from typing import Awaitable, Callable
 
 import anthropic
+import openai
 
 from .themes import FONTS
 
+log = logging.getLogger("zhubislide.content")
+
 MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
 EFFORT = os.environ.get("CLAUDE_EFFORT", "low")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "")      # empty: best model the key can use, picked at runtime
+OPENAI_EFFORT = os.environ.get("OPENAI_REASONING_EFFORT", "low")
 BATCH = int(os.environ.get("SLIDES_PER_BATCH", 4))
 PARALLEL = int(os.environ.get("BATCHES_PARALLEL", 4))
 
@@ -104,12 +110,90 @@ LAYOUT_GUIDE = """Layouts:
 Use at least 3 different layouts when there are 5+ slides; never the same layout 3 times in a row."""
 
 
+def provider() -> str:
+    """"anthropic" or "openai": AI_PROVIDER if set, otherwise whichever API key exists ("" when none)."""
+    p = os.environ.get("AI_PROVIDER", "").strip().lower()
+    if p in ("anthropic", "openai"):
+        return p
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai"
+    return ""
+
+
+# result of the startup check, shown by /api/meta so the page can explain a missing key or empty balance
+STATUS: dict = {"provider": "", "model": "", "ok": None, "error": ""}
+
+
 def _client() -> anthropic.AsyncAnthropic:
     return anthropic.AsyncAnthropic(max_retries=3)
 
 
+def _openai_client() -> openai.AsyncOpenAI:
+    return openai.AsyncOpenAI(max_retries=3)
+
+
+_VERSIONED = re.compile(r"^gpt-(\d+)(?:\.(\d+))?$")
+_openai_model = ""
+_model_lock = asyncio.Lock()
+
+
+async def openai_model() -> str:
+    """OPENAI_MODEL, or the newest flagship GPT model this key can use (gpt-5.2 > gpt-5.1 > gpt-5 > gpt-4.1 …)."""
+    global _openai_model
+    if OPENAI_MODEL:
+        return OPENAI_MODEL
+    async with _model_lock:
+        if not _openai_model:
+            ids = {m.id async for m in _openai_client().models.list()}
+            flagship = sorted((m for m in ids if _VERSIONED.match(m)),
+                              key=lambda m: tuple(int(x or 0) for x in _VERSIONED.match(m).groups()), reverse=True)
+            fallback = [m for m in ("gpt-4o", "gpt-4o-mini") if m in ids]
+            _openai_model = (flagship + fallback + ["gpt-4o-mini"])[0]
+            log.info("OpenAI model: %s", _openai_model)
+    return _openai_model
+
+
+def _reasoning(model: str) -> bool:
+    return model.startswith(("gpt-5", "o1", "o3", "o4"))
+
+
+async def _stream_openai(system: str, prompt: str, schema: dict, on_text: Callable[[str], Awaitable[None]] | None,
+                         max_tokens: int) -> dict:
+    model = await openai_model()
+    extra = {"reasoning_effort": OPENAI_EFFORT} if _reasoning(model) else {}
+    stream = await _openai_client().chat.completions.create(
+        model=model,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+        response_format={"type": "json_schema", "json_schema": {"name": "deck", "schema": schema, "strict": True}},
+        max_completion_tokens=max_tokens,
+        stream=True,
+        **extra,
+    )
+    text, finish = "", None
+    async for chunk in stream:
+        if not chunk.choices:
+            continue
+        choice = chunk.choices[0]
+        if choice.delta.refusal:
+            raise RuntimeError("refusal")
+        if choice.delta.content:
+            text += choice.delta.content
+            if on_text:
+                await on_text(text)
+        finish = choice.finish_reason or finish
+    if finish == "content_filter":
+        raise RuntimeError("refusal")
+    if finish == "length":
+        raise RuntimeError("too long")
+    return json.loads(text)
+
+
 async def _stream_json(system: str, prompt: str, schema: dict, on_text: Callable[[str], Awaitable[None]] | None,
                        max_tokens: int) -> dict:
+    if provider() == "openai":
+        return await _stream_openai(system, prompt, schema, on_text, max_tokens)
     text = ""
     async with _client().beta.messages.stream(
         model=MODEL,
@@ -131,6 +215,51 @@ async def _stream_json(system: str, prompt: str, schema: dict, on_text: Callable
         raise RuntimeError("too long")
     # after a server-side fallback the declined attempt may precede the answer: the last text block is it
     return json.loads([b.text for b in final.content if b.type == "text"][-1])
+
+
+def error_code(e: Exception) -> str:
+    """Short code for the page; the same codes for both providers."""
+    msg = f"{e} {getattr(e, 'code', '')} {getattr(e, 'body', '')}".lower()
+    if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError,
+                      openai.AuthenticationError, openai.PermissionDeniedError)):
+        return "auth"
+    if any(k in msg for k in ("insufficient_quota", "exceeded your current quota", "credit balance")):
+        return "quota"
+    if isinstance(e, (anthropic.RateLimitError, openai.RateLimitError)):
+        return "busy"
+    if isinstance(e, (anthropic.APIConnectionError, anthropic.InternalServerError,
+                      openai.APIConnectionError, openai.InternalServerError)):
+        return "network"
+    if isinstance(e, (anthropic.BadRequestError, openai.BadRequestError, openai.NotFoundError)):
+        return "bad_request"
+    if str(e) == "refusal":
+        return "refusal"
+    return "failed"
+
+
+async def self_check() -> None:
+    """One tiny request at startup: tells (in the logs and on the page) whether the key and its balance work."""
+    p = provider()
+    STATUS.update(provider=p, ok=None, error="")
+    if not p:
+        STATUS.update(ok=False, error="not_configured")
+        return
+    try:
+        if p == "openai":
+            model = await openai_model()
+            extra = {"reasoning_effort": OPENAI_EFFORT} if _reasoning(model) else {}
+            await _openai_client().chat.completions.create(
+                model=model, messages=[{"role": "user", "content": "Reply with: OK"}],
+                max_completion_tokens=64, **extra)
+        else:
+            model = MODEL
+            await _client().messages.create(model=MODEL, max_tokens=64, output_config={"effort": "low"},
+                                            messages=[{"role": "user", "content": "Reply with: OK"}])
+        STATUS.update(model=model, ok=True)
+        log.info("AI check ok: provider=%s model=%s", p, model)
+    except Exception as e:  # noqa: BLE001 - reported, never fatal
+        STATUS.update(ok=False, error=error_code(e))
+        log.error("AI check failed: provider=%s error=%s (%s)", p, STATUS["error"], type(e).__name__)
 
 
 async def outline(topic: str, pages: int, lang: str, tone: str, extra: str) -> dict:

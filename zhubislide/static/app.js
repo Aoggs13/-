@@ -57,6 +57,7 @@ const I18N = {
     err_failed: "Қате шықты. Қайталап көріңіз.", err_restart: "Сервер қайта қосылды — презентацияны қайта жасаңыз.",
     err_rate_limit: "Сағатына шектеу бар. Сәлден соң қайталаңыз.", err_not_configured: "Сайт әлі бапталуда: әкімші ANTHROPIC_API_KEY қосуы керек.",
     err_bad_params: "Баптаулар қате.", err_bad_request: "Сұраныс қате. Тақырыпты өзгертіп көріңіз.",
+    err_quota: "ИИ кілтінің балансы таусылған не толтырылмаған. Әкімші OpenAI / Anthropic балансын толтыруы керек.",
     err_topic: "Тақырыпты жазыңыз (кемінде 3 әріп).", err_not_found: "Презентация табылмады (мерзімі өткен болуы мүмкін).",
     retry: "Қайта көру",
     examples: ["Ғарышты игеру", "Наурыз мейрамы", "Жасанды интеллект", "Абай Құнанбайұлы", "Климаттың өзгеруі", "Қазақ хандығы", "Салауатты өмір салты"],
@@ -122,6 +123,7 @@ const I18N = {
     err_failed: "Произошла ошибка. Попробуйте ещё раз.", err_restart: "Сервер перезапустился — создайте презентацию заново.",
     err_rate_limit: "Лимит в час исчерпан. Попробуйте немного позже.", err_not_configured: "Сайт ещё настраивается: администратору нужно добавить ANTHROPIC_API_KEY.",
     err_bad_params: "Неверные настройки.", err_bad_request: "Ошибка запроса. Попробуйте изменить тему.",
+    err_quota: "Баланс ключа ИИ пуст или не пополнен. Администратору нужно пополнить баланс OpenAI / Anthropic.",
     err_topic: "Напишите тему (минимум 3 буквы).", err_not_found: "Презентация не найдена (возможно, срок хранения истёк).",
     retry: "Попробовать снова",
     examples: ["Освоение космоса", "Праздник Наурыз", "Искусственный интеллект", "Абай Кунанбаев", "Изменение климата", "Казахское ханство", "Здоровый образ жизни"],
@@ -734,6 +736,7 @@ async function boot() {
   if (S.form.font !== "auto" && !S.meta.fonts[S.form.font]) S.form.font = "auto";
   renderChoices(); renderGallery(); updateEta();
   if (!S.meta.ready) showAlert(tr("err_not_configured"), true);
+  else if (S.meta.ai && S.meta.ai.ok === false && ["auth", "quota"].includes(S.meta.ai.error)) showAlert(tr("err_" + S.meta.ai.error), true);
   window.addEventListener("hashchange", route);
   route();
   let rt;

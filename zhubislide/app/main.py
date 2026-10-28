@@ -36,9 +36,10 @@ _daily: deque = deque()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     manager.load()
-    log.info("ZhubiSlide started: model=%s, key=%s, data=%s", content.MODEL,
-             "set" if os.environ.get("ANTHROPIC_API_KEY") else "MISSING", jobs.DATA_DIR)
+    log.info("ZhubiSlide started: provider=%s, data=%s", content.provider() or "NONE (no API key)", jobs.DATA_DIR)
+    check = asyncio.create_task(content.self_check())
     yield
+    check.cancel()
 
 
 app = FastAPI(title="ZhubiSlide", docs_url=None, redoc_url=None, lifespan=lifespan)
@@ -100,7 +101,8 @@ async def meta():
         # seconds for every (pages, density, photos) combination, so the page shows the time instantly
         "estimates": {d: {p: {"1": jobs.estimate(p, True, d), "0": jobs.estimate(p, False, d)}
                           for p in jobs.PAGES} for d in content.DENSITY},
-        "ready": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        "ready": bool(content.provider()),
+        "ai": {k: content.STATUS[k] for k in ("provider", "ok", "error")},
         "learned_from": jobs.STATS["runs"],
     }
 
@@ -118,7 +120,7 @@ async def create_job(body: NewJob, request: Request):
             or (body.font not in FONTS and body.font != AUTO) \
             or body.tone not in content.TONES or body.density not in content.DENSITY:
         raise HTTPException(400, "bad_params")
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not content.provider():
         raise HTTPException(503, "not_configured")
     if not rate_ok(client_ip(request)):
         raise HTTPException(429, "rate_limit")

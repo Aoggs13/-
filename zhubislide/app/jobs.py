@@ -14,8 +14,6 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-import anthropic
-
 from . import builder, content, images
 from .themes import AUTO, FONTS, THEMES, resolve
 
@@ -212,7 +210,7 @@ class Manager:
                 job.status, job.progress = "done", 100.0
             except Exception as e:
                 log.exception("job %s failed", job.id)
-                job.status, job.error = "error", _error_code(e)
+                job.status, job.error = "error", content.error_code(e)
             job.finished = time.time()
             job.save()
 
@@ -315,17 +313,3 @@ class Manager:
             if job.created < cutoff and job.status in ("done", "error"):
                 self.jobs.pop(job_id, None)
                 shutil.rmtree(job.dir, ignore_errors=True)
-
-
-def _error_code(e: Exception) -> str:
-    if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
-        return "auth"
-    if isinstance(e, anthropic.RateLimitError):
-        return "busy"
-    if isinstance(e, (anthropic.APIConnectionError, anthropic.InternalServerError)):
-        return "network"
-    if isinstance(e, anthropic.BadRequestError):
-        return "bad_request"
-    if str(e) == "refusal":
-        return "refusal"
-    return "failed"
