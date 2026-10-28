@@ -20,7 +20,10 @@ Tests: `python -m pytest -q tests` (9 pass; model-dependent ones skip without mo
 ## ZhubiSlide (folder `zhubislide/`, branch `zhubislide`)
 Website (no Telegram bot): topic → designed PPTX, 5–25 slides, kk/ru, auto topic design + presets, 8 fonts,
 full text, live countdown. Tests: `cd zhubislide && python -m pytest -q tests` (32 pass, no network).
-Railway: service `zhubislide` in project **Sulba Heritage** (free plan blocked a new project), root dir
-`/zhubislide`, volume `/data`, domain zhubislide-production.up.railway.app, vars PORT=8000, DAILY_LIMIT=100.
-Pending: user grants Railway's GitHub app access to `Aoggs13/-`, then `connect-service-source` (branch
-`zhubislide`); user adds `ANTHROPIC_API_KEY` in Variables (never in chat/code).
+Railway: service `zhubislide` in project **Sulba Heritage** (free plan blocked a new project), volume `/data`,
+https://zhubislide-production.up.railway.app, vars PORT=8000, DATA_DIR=/data, DAILY_LIMIT=100.
+Railway's GitHub app has no access to this repo, so the service runs image `python:3.13-slim` with a start
+command that downloads a **pinned commit** tarball of this (public) repo, pip-installs and starts uvicorn
+(boot script is base64 in the start command). To ship a new version: push, then update the start command
+with the new commit SHA (`update-service startCommand`) — the service redeploys.
+Pending: user adds `ANTHROPIC_API_KEY` in the service Variables (never in chat/code).
