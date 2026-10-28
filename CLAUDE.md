@@ -16,3 +16,11 @@ Tests: `python -m pytest -q tests` (9 pass; model-dependent ones skip without mo
 3. Ask the user to add `BOT_TOKEN` in the service Variables (do not ask them to paste it in chat).
 4. Deploy, watch logs for `bot started`, then ask the user to send `/start` and a photo.
 5. Remind the user to rotate the token in @BotFather (/revoke) afterwards — the old one was pasted in chat once.
+
+## ZhubiSlide (folder `zhubislide/`, branch `zhubislide`)
+Website (no Telegram bot): topic → designed PPTX, 5–25 slides, kk/ru, auto topic design + presets, 8 fonts,
+full text, live countdown. Tests: `cd zhubislide && python -m pytest -q tests` (32 pass, no network).
+Railway: service `zhubislide` in project **Sulba Heritage** (free plan blocked a new project), root dir
+`/zhubislide`, volume `/data`, domain zhubislide-production.up.railway.app, vars PORT=8000, DAILY_LIMIT=100.
+Pending: user grants Railway's GitHub app access to `Aoggs13/-`, then `connect-service-source` (branch
+`zhubislide`); user adds `ANTHROPIC_API_KEY` in Variables (never in chat/code).
