@@ -15,5 +15,7 @@ def _fresh_provider_state(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(content, "_active", "")
     monkeypatch.setattr(content, "_models", {})
+    monkeypatch.setattr(content, "_ids", {})
+    monkeypatch.setattr(content, "_bad", {})
     monkeypatch.setattr(content, "OPENAI_MODEL", "")
     monkeypatch.setattr(content, "GEMINI_MODEL", "")

@@ -28,27 +28,57 @@ MAX_VARIANTS = 4           # design/font variants of one deck kept on disk
 PAGES = [5, 8, 10, 15, 20, 25]
 BATCH_FIRST = 5.0          # seconds until a slide batch starts streaming
 
-# starting guesses; replaced by moving averages of real runs (persisted on the volume)
+# starting guesses (measured once per AI provider: their speeds differ a lot), replaced by moving averages of
+# real runs that are persisted on the volume
 DEFAULT_STATS = {"outline_s": 14.0, "per_slide_medium": 5.0, "per_slide_long": 8.0, "per_slide_full": 12.0,
                  "img_tail": 3.0, "build_per_slide": 0.3, "runs": 0}
+PROVIDER_DEFAULTS = {
+    # gemini-3.6-flash, reasoning "low": outline ~7 s, a batch of 6 "long" slides ~18 s
+    "gemini": {"outline_s": 9.0, "per_slide_medium": 2.5, "per_slide_long": 3.5, "per_slide_full": 5.0},
+}
 
 ID_RE = re.compile(r"^[a-f0-9]{32}$")
 
 
-def load_stats() -> dict:
+def load_stats() -> dict[str, dict]:
     try:
-        return {**DEFAULT_STATS, **json.loads(STATS_FILE.read_text())}
+        data = json.loads(STATS_FILE.read_text())
+        return {p: v for p, v in data.items() if isinstance(v, dict)}
     except Exception:
-        return dict(DEFAULT_STATS)
+        return {}
 
 
-STATS = load_stats()
+_ALL_STATS = load_stats()
+
+
+class _ProviderStats:
+    """Timing stats of the AI provider currently in use."""
+
+    @staticmethod
+    def _d() -> dict:
+        p = content.provider() or "none"
+        d = _ALL_STATS.setdefault(p, {})
+        for k, v in {**DEFAULT_STATS, **PROVIDER_DEFAULTS.get(p, {})}.items():
+            d.setdefault(k, v)
+        return d
+
+    def __getitem__(self, k: str) -> float:
+        return self._d()[k]
+
+    def __setitem__(self, k: str, v: float) -> None:
+        self._d()[k] = v
+
+    def get(self, k: str, default=None):
+        return self._d().get(k, default)
+
+
+STATS = _ProviderStats()
 
 
 def save_stats() -> None:
     try:
         STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        STATS_FILE.write_text(json.dumps(STATS))
+        STATS_FILE.write_text(json.dumps(_ALL_STATS))
     except OSError:
         pass
 

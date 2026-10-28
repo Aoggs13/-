@@ -13,9 +13,11 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Awaitable, Callable
 
 import anthropic
+import httpx2
 import openai
 
 from .themes import FONTS
@@ -115,6 +117,7 @@ _KEYS = {"anthropic": ("ANTHROPIC_API_KEY",), "openai": ("OPENAI_API_KEY",),
          "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai/"   # Gemini's OpenAI-compatible API
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "")
+GEMINI_EFFORT = os.environ.get("GEMINI_REASONING_EFFORT", "low")
 
 
 def _key(p: str) -> str:
@@ -143,8 +146,8 @@ def provider() -> str:
 
 
 def batch_size() -> int:
-    # Gemini's free tier allows few requests per minute: fewer, bigger requests
-    return max(BATCH, 6) if provider() == "gemini" else BATCH
+    # Gemini's free tier counts requests (20 per model per day): fewer, bigger requests
+    return max(BATCH, 8) if provider() == "gemini" else BATCH
 
 
 def parallel() -> int:
@@ -161,13 +164,18 @@ def _client() -> anthropic.AsyncAnthropic:
 
 def _openai_client(p: str = "openai") -> openai.AsyncOpenAI:
     if p == "gemini":
-        return openai.AsyncOpenAI(api_key=_key("gemini"), base_url=GEMINI_BASE, max_retries=3)
+        # failures switch to another model (see _stream_gemini) instead of retrying the same one for long
+        return openai.AsyncOpenAI(api_key=_key("gemini"), base_url=GEMINI_BASE, max_retries=1,
+                                  timeout=httpx2.Timeout(180.0, connect=10.0, read=45.0))
     return openai.AsyncOpenAI(max_retries=3)
 
 
 _GPT = re.compile(r"^gpt-(\d+)(?:\.(\d+))?$")
 _GEMINI_FLASH = re.compile(r"^gemini-(\d+)(?:\.(\d+))?-flash$")
+_GEMINI_LITE = re.compile(r"^gemini-(\d+)(?:\.(\d+))?-flash-lite$")
 _models: dict[str, str] = {}
+_ids: dict[str, set[str]] = {}
+_bad: dict[str, float] = {}               # Gemini model → time until which it is skipped
 _model_lock = asyncio.Lock()
 
 
@@ -176,21 +184,56 @@ def _newest(ids: set[str], pattern: re.Pattern) -> list[str]:
                   key=lambda m: tuple(int(x or 0) for x in pattern.match(m).groups()), reverse=True)
 
 
-async def model_for(p: str) -> str:
-    """Env override, or the newest suitable model the key can use: flagship gpt-N.M / gemini-N.M-flash."""
-    override = OPENAI_MODEL if p == "openai" else GEMINI_MODEL
-    if override:
-        return override
+async def _list_models(p: str) -> set[str]:
+    """Model ids the key can see (listing costs no quota)."""
     async with _model_lock:
-        if p not in _models:
-            ids = {m.id.removeprefix("models/") async for m in _openai_client(p).models.list()}
-            if p == "openai":
-                found = _newest(ids, _GPT) + [m for m in ("gpt-4o", "gpt-4o-mini") if m in ids] + ["gpt-4o-mini"]
-            else:
-                found = _newest(ids, _GEMINI_FLASH) + ["gemini-2.5-flash"]
-            _models[p] = found[0]
-            log.info("%s model: %s", p, _models[p])
+        if p not in _ids:
+            _ids[p] = {m.id.removeprefix("models/") async for m in _openai_client(p).models.list()}
+    return _ids[p]
+
+
+async def model_for(p: str) -> str:
+    """OPENAI_MODEL, or the newest flagship gpt-N.M the key can use."""
+    if OPENAI_MODEL:
+        return OPENAI_MODEL
+    if p not in _models:
+        ids = await _list_models(p)
+        _models[p] = (_newest(ids, _GPT) + [m for m in ("gpt-4o", "gpt-4o-mini") if m in ids] + ["gpt-4o-mini"])[0]
+        log.info("%s model: %s", p, _models[p])
     return _models[p]
+
+
+async def gemini_candidates() -> list[str]:
+    """Free-tier Gemini models to try, best first, skipping ones that just failed or used up today's limit.
+
+    Each model has its own daily request limit, so when one is used up the next one takes over; the very
+    newest models are often listed before they are actually served (503), they are skipped the same way.
+    """
+    if GEMINI_MODEL:
+        return [GEMINI_MODEL]
+    ids = await _list_models("gemini")
+    order = [*_newest(ids, _GEMINI_FLASH), "gemini-flash-latest", *_newest(ids, _GEMINI_LITE), "gemini-flash-lite-latest"]
+    order = [m for m in dict.fromkeys(order) if m in ids]
+    last = _models.get("gemini")                         # the model that worked last goes first
+    if last in order:
+        order.remove(last)
+        order.insert(0, last)
+    now = time.time()
+    return [m for m in order if _bad.get(m, 0) <= now]
+
+
+def _skip(model: str, seconds: float, why: str) -> None:
+    _bad[model] = time.time() + seconds
+    log.warning("gemini model %s skipped for %d min: %s", model, seconds // 60, why)
+
+
+def _retry_after(e: openai.APIStatusError) -> float:
+    """Seconds until a Gemini quota resets (from its RetryInfo), defaults: a day limit 6 h, a minute limit 1 min."""
+    text = e.response.text if e.response is not None else ""
+    m = re.search(r'"retryDelay":\s*"(\d+)s"', text)
+    if m:
+        return float(m.group(1))
+    return 6 * 3600 if "PerDay" in text else 60
 
 
 def _reasoning(model: str) -> bool:
@@ -208,14 +251,22 @@ def _plain_schema(schema):
 
 def _oa_params(p: str, model: str, max_tokens: int) -> dict:
     if p == "gemini":
-        return {"max_tokens": max_tokens}
+        # without it Gemini thinks ~20 s before the first token; "low" starts streaming in ~2 s
+        return {"max_tokens": max_tokens, "reasoning_effort": GEMINI_EFFORT}
     extra = {"reasoning_effort": OPENAI_EFFORT} if _reasoning(model) else {}
     return {"max_completion_tokens": max_tokens, **extra}
 
 
-async def _stream_openai(p: str, system: str, prompt: str, schema: dict,
-                         on_text: Callable[[str], Awaitable[None]] | None, max_tokens: int) -> dict:
-    model = await model_for(p)
+class Truncated(RuntimeError):
+    """The stream ended without a finish reason or with broken JSON (seen with Gemini under load)."""
+
+
+class DailyLimit(RuntimeError):
+    """Every free Gemini model has used up today's request limit."""
+
+
+async def _stream_once(p: str, model: str, system: str, prompt: str, schema: dict,
+                       on_text: Callable[[str], Awaitable[None]] | None, max_tokens: int) -> dict:
     fmt = {"name": "deck", "schema": _plain_schema(schema) if p == "gemini" else schema, "strict": True}
     stream = await _openai_client(p).chat.completions.create(
         model=model,
@@ -225,29 +276,83 @@ async def _stream_openai(p: str, system: str, prompt: str, schema: dict,
         **_oa_params(p, model, max_tokens),
     )
     text, finish = "", None
-    async for chunk in stream:
-        if not chunk.choices:
-            continue
-        choice = chunk.choices[0]
-        if getattr(choice.delta, "refusal", None):
-            raise RuntimeError("refusal")
-        if choice.delta.content:
-            text += choice.delta.content
-            if on_text:
-                await on_text(text)
-        finish = choice.finish_reason or finish
+    try:
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            if getattr(choice.delta, "refusal", None):
+                raise RuntimeError("refusal")
+            if choice.delta.content:
+                text += choice.delta.content
+                if on_text:
+                    await on_text(text)
+            finish = choice.finish_reason or finish
+    except (json.JSONDecodeError, httpx2.TransportError) as e:   # connection dropped mid-stream
+        raise Truncated(f"{type(e).__name__} after {len(text)} chars") from None
     if finish == "content_filter":
         raise RuntimeError("refusal")
     if finish == "length":
         raise RuntimeError("too long")
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        raise Truncated(f"finish={finish} chars={len(text)}") from None
+
+
+async def _stream_openai(system: str, prompt: str, schema: dict,
+                         on_text: Callable[[str], Awaitable[None]] | None, max_tokens: int) -> dict:
+    model = await model_for("openai")
+    error: Exception | None = None
+    for attempt in range(3):
+        try:
+            return await _stream_once("openai", model, system, prompt, schema, on_text, max_tokens)
+        except (Truncated, openai.InternalServerError, openai.APITimeoutError, openai.APIConnectionError) as e:
+            error = e
+            log.warning("openai/%s attempt %d failed: %s %s", model, attempt + 1, type(e).__name__, str(e)[:120])
+    raise error
+
+
+async def _stream_gemini(system: str, prompt: str, schema: dict,
+                         on_text: Callable[[str], Awaitable[None]] | None, max_tokens: int) -> dict:
+    """Try the best available free model; on overload, a cut stream or a used-up limit move to the next one."""
+    error: Exception | None = None
+    cut: dict[str, int] = {}
+    for _ in range(6):
+        candidates = await gemini_candidates()
+        if not candidates:
+            break
+        model = candidates[0]
+        try:
+            out = await _stream_once("gemini", model, system, prompt, schema, on_text, max_tokens)
+            if _models.get("gemini") != model:
+                log.info("gemini model: %s", model)
+            _models["gemini"] = model
+            return out
+        except openai.RateLimitError as e:
+            error = e
+            _skip(model, _retry_after(e), "request limit reached")
+        except Truncated as e:
+            error = e
+            cut[model] = cut.get(model, 0) + 1
+            if cut[model] >= 2:
+                _skip(model, 600, f"stream cut twice ({e})")
+        except (openai.InternalServerError, openai.APITimeoutError, openai.APIConnectionError,
+                openai.NotFoundError) as e:
+            error = e
+            _skip(model, 1800, type(e).__name__)
+    if isinstance(error, openai.RateLimitError) or (error is None and _bad):
+        raise DailyLimit("all free Gemini models used up today's limit")
+    raise error or RuntimeError("no gemini model")
 
 
 async def _stream_json(system: str, prompt: str, schema: dict, on_text: Callable[[str], Awaitable[None]] | None,
                        max_tokens: int) -> dict:
     p = provider()
-    if p in ("openai", "gemini"):
-        return await _stream_openai(p, system, prompt, schema, on_text, max_tokens)
+    if p == "openai":
+        return await _stream_openai(system, prompt, schema, on_text, max_tokens)
+    if p == "gemini":
+        return await _stream_gemini(system, prompt, schema, on_text, max_tokens)
     text = ""
     async with _client().beta.messages.stream(
         model=MODEL,
@@ -272,8 +377,10 @@ async def _stream_json(system: str, prompt: str, schema: dict, on_text: Callable
 
 
 def error_code(e: Exception) -> str:
-    """Short code for the page; the same codes for both providers."""
+    """Short code for the page; the same codes for every provider."""
     msg = f"{e} {getattr(e, 'code', '')} {getattr(e, 'body', '')}".lower()
+    if isinstance(e, DailyLimit):
+        return "daily_limit"
     if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError,
                       openai.AuthenticationError, openai.PermissionDeniedError)):
         return "auth"
@@ -288,16 +395,22 @@ def error_code(e: Exception) -> str:
         return "bad_request"
     if str(e) == "refusal":
         return "refusal"
+    if isinstance(e, Truncated):
+        return "network"
     return "failed"
 
 
 async def _check(p: str) -> str:
-    """A tiny request without retries; returns the model name or raises the provider's error."""
+    """Is the key usable? Anthropic/OpenAI: a tiny request without retries (shows an empty balance).
+    Gemini: only lists models — its free requests are counted per day, so none is spent on checks."""
     if p == "anthropic":
         await _client().with_options(max_retries=0).messages.create(
             model=MODEL, max_tokens=64, output_config={"effort": "low"},
             messages=[{"role": "user", "content": "Reply with: OK"}])
         return MODEL
+    if p == "gemini":
+        found = await gemini_candidates()
+        return found[0] if found else ""
     model = await model_for(p)
     await _openai_client(p).with_options(max_retries=0).chat.completions.create(
         model=model, messages=[{"role": "user", "content": "Reply with: OK"}], **_oa_params(p, model, 64))
