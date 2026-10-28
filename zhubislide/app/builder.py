@@ -26,7 +26,8 @@ W, H = Inches(13.333), Inches(7.5)
 IMAGE_LAYOUTS = {"image_right", "image_left", "quote"}
 X0, X1 = 0.75, 12.58     # content margins, inches
 TOP, BOTTOM = 2.0, 6.75  # content area under the heading
-LINE_H = 1.2             # line height (em) at line_spacing 1.0
+LINE_H = 1.22            # line height (em) at line_spacing 1.0
+SAFETY = 1.1             # glyphs a bit wider than measured: the font may be substituted (Google Slides, phones)
 
 # per-build font (builds run in worker threads, a ContextVar keeps them independent)
 _font: contextvars.ContextVar[str] = contextvars.ContextVar("font", default="Arial")
@@ -42,8 +43,12 @@ def needs_image(s: dict) -> bool:
 
 # ───────────────────────── text fitting ─────────────────────────
 
+def _char_w(bold: bool) -> float:
+    return (FONTS.get(font(), FONTS["Arial"])["char_w"] + (0.05 if bold else 0)) * SAFETY
+
+
 def n_lines(value: str, width_in: float, size: float, bold: bool = False) -> int:
-    char_w = FONTS.get(font(), FONTS["Arial"])["char_w"] + (0.05 if bold else 0)
+    char_w = _char_w(bold)
     per_line = max(4, int(width_in / (size * char_w / 72)))
     total = 0
     for para in value.split("\n"):
@@ -77,18 +82,25 @@ def text_height(paras: list[str], width_in: float, size: float, spacing: float =
 def word_fits(paras: list[str], width_in: float, size: float, bold: bool = False) -> bool:
     """The longest word must fit on one line, otherwise it would be broken in the middle."""
     longest = max((len(w) for p in paras for w in p.split()), default=0)
-    char_w = FONTS.get(font(), FONTS["Arial"])["char_w"] + (0.05 if bold else 0)
-    return longest * size * char_w / 72 <= width_in
+    return longest * size * _char_w(bold) / 72 <= width_in
 
 
-def fit(paras: list[str], width_in: float, height_in: float, max_pt: float, min_pt: float = 10.0, **kw) -> float:
+def fit(paras: list[str], width_in: float, height_in: float, max_pt: float, min_pt: float = 10.0,
+        max_lines: int = 0, **kw) -> float:
+    """Largest size (max_pt → min_pt) at which the text fits the box, no word is broken and, when given,
+    the text takes at most max_lines lines."""
     paras = [p for p in paras if p]
     if not paras:
         return max_pt
     size = max_pt
     bold = kw.get("bold", False)
-    while size > min_pt and (text_height(paras, width_in, size, **kw) > height_in
-                             or not word_fits(paras, width_in, size, bold)):
+
+    def too_big(sz: float) -> bool:
+        if text_height(paras, width_in, sz, **kw) > height_in or not word_fits(paras, width_in, sz, bold):
+            return True
+        return bool(max_lines) and sum(n_lines(p, width_in, sz, bold) for p in paras) > max_lines
+
+    while size > min_pt and too_big(size):
         size -= 0.5
     return size
 
@@ -379,21 +391,23 @@ def s_cards(slide, t, s):
         head, sep, rest = item.partition(":")
         parts.append((head.strip(), rest.strip()) if sep and len(head) < 70 and rest.strip() else ("", item))
     heads = [h for h, _ in parts if h]
-    head_size = min(fit([h], cw - 1.35, 0.8, 18, 10, bold=True) for h in heads) if heads else 18
-    body_h = ch - 1.35
-    body_size = min(fit([b], cw - 0.6, body_h, 19 if n <= 3 else 18, 10) for _, b in parts)
+    head_h = 1.1 if heads else 0.0
+    body_top = 1.12 + head_h
+    head_size = min(fit([h], cw - 0.6, head_h, 19, 10, max_lines=3, bold=True, spacing=1.0) for h in heads) \
+        if heads else 0
+    body_size = min(fit([b], cw - 0.6, ch - body_top - 0.25, 19 if n <= 3 else 18, 9.5) for _, b in parts)
     for i, (head, rest) in enumerate(parts):
         x = X0 + (cw + gap) * i
         color = t["accent"] if i % 2 == 0 else t["accent2"]
         panel(slide, t, x, top, cw, ch, 0.07, border=color)
         rect(slide, x + 0.25, top, cw - 0.5, 0.07, color)
-        _label(rect(slide, x + 0.3, top + 0.35, 0.62, 0.62, color, shape=MSO_SHAPE.OVAL), f"{i + 1:02d}", 14,
+        _label(rect(slide, x + 0.3, top + 0.32, 0.62, 0.62, color, shape=MSO_SHAPE.OVAL), f"{i + 1:02d}", 14,
                on(color))
         if head:
-            text(slide, x + 1.05, top + 0.26, cw - 1.35, 0.8, head, head_size, t["text"], bold=True,
-                 anchor=MSO_ANCHOR.MIDDLE, spacing=1.0)
-        text(slide, x + 0.3, top + 1.2, cw - 0.6, body_h, rest, body_size, t["muted"] if head else t["text"],
-             spacing=1.1)
+            text(slide, x + 0.3, top + 1.08, cw - 0.6, head_h, head, head_size, t["text"], bold=True,
+                 anchor=MSO_ANCHOR.TOP, spacing=1.0)
+        text(slide, x + 0.3, top + body_top, cw - 0.6, ch - body_top - 0.25, rest, body_size,
+             t["muted"] if head else t["text"], spacing=1.1)
 
 
 def s_stats(slide, t, s):
@@ -406,16 +420,19 @@ def s_stats(slide, t, s):
     gap = 0.3
     cw = (X1 - X0 - gap * (n - 1)) / n
     rest = [b for b in (s.get("bullets") or [])[:3] if b]
-    sh = 2.15 if sum(len(b) for b in rest) > 220 else 2.6
+    sh = 2.45 if sum(len(b) for b in rest) > 220 else 2.8
+    vh = 1.05
     for i, st in enumerate(stats):
         x = X0 + (cw + gap) * i
         color = t["accent"] if i % 2 == 0 else t["accent2"]
         panel(slide, t, x, top, cw, sh, 0.08)
         rect(slide, x + 0.3, top + sh - 0.07, cw - 0.6, 0.07, color)
-        vh = sh * 0.5
-        ftext(slide, x + 0.2, top + 0.15, cw - 0.4, vh, st["value"], 54, 22, color, bold=True,
-              align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE, spacing=1.0)
-        ftext(slide, x + 0.25, top + 0.3 + vh, cw - 0.5, sh - vh - 0.45, st["label"], 17, 10.5, t["text"],
+        value = st["value"].replace(" ", "\u00a0")       # the number stays on one line
+        size = fit([value], (cw - 0.4) / 1.12, vh, 50, 14, max_lines=1, bold=True, spacing=1.0)  # wide digits
+        tf = text(slide, x + 0.2, top + 0.15, cw - 0.4, vh, value, size, color, bold=True, align=PP_ALIGN.CENTER,
+                  anchor=MSO_ANCHOR.MIDDLE, spacing=1.0)
+        tf.word_wrap = False
+        ftext(slide, x + 0.25, top + 0.25 + vh, cw - 0.5, sh - vh - 0.45, st["label"], 16, 9.5, t["text"],
               align=PP_ALIGN.CENTER, spacing=1.05)
     if rest:
         y = top + sh + 0.35
@@ -477,7 +494,7 @@ def s_timeline(slide, t, s):
     box_top = line_y + 0.42
     box_h = BOTTOM - box_top
     size = min(fit([r], bw - 0.3, box_h - 0.3, 17 if n <= 4 else 16, 10) for _, r in parts)
-    head_size = min(fit([h], bw, 0.6, 20, 11, bold=True) for h, _ in parts)
+    head_size = min(fit([h], bw, 0.6, 20, 10, max_lines=1, bold=True) for h, _ in parts)
     for i, (head, rest) in enumerate(parts):
         cx = X0 + step * i + step / 2
         color = t["accent"] if i % 2 == 0 else t["accent2"]

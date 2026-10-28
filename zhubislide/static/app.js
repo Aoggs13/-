@@ -281,13 +281,17 @@ const L = {
     const items = (s.bullets || []).slice(0, 4);
     if (!items.length) items.push(s.lead || s.title);
     const n = items.length, gap = 0.3, cw = (X1 - X0 - gap * (n - 1)) / n, top = ll.y, ch = BOTTOM - top;
-    items.forEach((it, i) => {
+    const parts = items.map((it) => {
+      const k = it.indexOf(":");
+      return k > 0 && k < 70 && it.slice(k + 1).trim() ? [it.slice(0, k).trim(), it.slice(k + 1).trim()] : ["", it];
+    });
+    const headH = parts.some(([hd]) => hd) ? 1.1 : 0, bodyTop = 1.12 + headH;
+    parts.forEach(([head, rest], i) => {
       const x = X0 + (cw + gap) * i, color = i % 2 ? t.accent2 : t.accent;
-      const k = it.indexOf(":"), head = k > 0 && k < 70 && it.slice(k + 1).trim() ? it.slice(0, k).trim() : "", rest = head ? it.slice(k + 1).trim() : it;
       h += panel(t, x, top, cw, ch, color) + rectHtml(x + 0.25, top, cw - 0.5, 0.07, color)
-        + `<div class="circle" style="${box(x + 0.3, top + 0.35, 0.62, 0.62)}background:#${color};color:${onColor(color)};font-size:${PT(14)}">${String(i + 1).padStart(2, "0")}</div>`;
-      if (head) h += fitBox(x + 1.05, top + 0.26, cw - 1.35, 0.8, esc(head), 18, 10, { anchor: "middle", bold: true, group: gid + "h", extra: "line-height:1.05;" });
-      h += fitBox(x + 0.3, top + 1.2, cw - 0.6, ch - 1.35, esc(rest), n <= 3 ? 19 : 18, 10, { group: gid + "b", color: `#${head ? t.muted : t.text}`, extra: "line-height:1.3;" });
+        + `<div class="circle" style="${box(x + 0.3, top + 0.32, 0.62, 0.62)}background:#${color};color:${onColor(color)};font-size:${PT(14)}">${String(i + 1).padStart(2, "0")}</div>`;
+      if (head) h += fitBox(x + 0.3, top + 1.08, cw - 0.6, headH, esc(head), 19, 11, { bold: true, group: gid + "h", extra: "line-height:1.05;" });
+      h += fitBox(x + 0.3, top + bodyTop, cw - 0.6, ch - bodyTop - 0.25, esc(rest), n <= 3 ? 19 : 18, 9.5, { group: gid + "b", color: `#${head ? t.muted : t.text}`, extra: "line-height:1.3;" });
     });
     return h;
   },
@@ -298,12 +302,12 @@ const L = {
     const ll = leadLine(t, s.lead); h += ll.html;
     const n = stats.length, gap = 0.3, cw = (X1 - X0 - gap * (n - 1)) / n, top = ll.y;
     const rest = (s.bullets || []).filter(Boolean).slice(0, 3);
-    const sh = rest.join("").length > 220 ? 2.15 : 2.6, vh = sh * 0.5;
+    const sh = rest.join("").length > 220 ? 2.45 : 2.8, vh = 1.05;
     stats.forEach((st, i) => {
       const x = X0 + (cw + gap) * i, color = i % 2 ? t.accent2 : t.accent;
       h += panel(t, x, top, cw, sh) + rectHtml(x + 0.3, top + sh - 0.07, cw - 0.6, 0.07, color)
-        + fitBox(x + 0.2, top + 0.15, cw - 0.4, vh, esc(st.value), 54, 22, { anchor: "middle", align: "center", bold: true, color: `#${color}`, extra: "line-height:1;" })
-        + fitBox(x + 0.25, top + 0.3 + vh, cw - 0.5, sh - vh - 0.45, esc(st.label), 17, 10.5, { align: "center", extra: "line-height:1.2;" });
+        + fitBox(x + 0.2, top + 0.15, cw - 0.4, vh, esc(st.value), 50, 16, { anchor: "middle", align: "center", bold: true, color: `#${color}`, extra: "line-height:1;white-space:nowrap;" })
+        + fitBox(x + 0.25, top + 0.25 + vh, cw - 0.5, sh - vh - 0.45, esc(st.label), 16, 9.5, { align: "center", extra: "line-height:1.2;" });
     });
     if (rest.length) { const y = top + sh + 0.35; h += fitBox(X0, y, X1 - X0, BOTTOM - y, bulletsHtml(rest, `#${t.accent}`), 19, 10.5); }
     return h;

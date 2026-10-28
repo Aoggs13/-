@@ -22,6 +22,10 @@ import openai
 
 from .themes import FONTS
 
+# fonts "auto" may pick: present wherever PowerPoint or Google Slides opens the file (Segoe UI is Windows-only,
+# Courier New does not suit slides); every FONTS entry stays available as a manual choice
+AUTO_FONTS = [f for f in FONTS if f not in ("Segoe UI", "Courier New")]
+
 log = logging.getLogger("zhubislide.content")
 
 MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
@@ -46,7 +50,7 @@ DESIGN = _obj({
     "dark": {"type": "boolean"},
     "bg1": _STR, "bg2": _STR, "accent": _STR, "accent2": _STR,
     "pattern": {"type": "string", "enum": ["blobs", "geometric", "lines", "dots"]},
-    "font": {"type": "string", "enum": list(FONTS)},
+    "font": {"type": "string", "enum": AUTO_FONTS},
 })
 
 OUTLINE_SCHEMA = _obj({
@@ -459,8 +463,8 @@ gold; finance → navy + emerald; sport → black + energetic orange; children/s
 mood: 3-5 words; dark: dark or light background; bg1/bg2: background gradient (hex like "0B1D3A");
 accent/accent2: vivid highlight colours (hex) that contrast with the background; pattern: blobs
 (soft/organic), geometric (tech/business/science), lines (strict/academic/history), dots (playful/school).
-font: Times New Roman or Cambria for history, literature, law, classic/academic topics; Segoe UI or Calibri for
-tech, business, modern topics; Verdana or Tahoma for school/children; Arial when neutral.
+font: Times New Roman or Cambria for history, literature, law, classic/academic topics; Calibri for tech,
+business, modern topics; Verdana or Tahoma for school/children; Arial when neutral.
 "subtitle": one sentence. "thanks": a short closing phrase (e.g. "Назарларыңызға рахмет!").
 {("Wishes from the author: " + extra) if extra else ""}"""
     return await _stream_json(SYSTEM, prompt, OUTLINE_SCHEMA, None, 16000)

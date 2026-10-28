@@ -29,5 +29,7 @@ with the new commit SHA (`update-service startCommand`), then change the `ZS_VER
 starts a deployment with the new command (a plain `redeploy` may reuse the old one).
 AI keys: any of ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY; the startup check picks the first that
 works and logs `AI check ok|failed`. OPENAI_API_KEY is set but its account has no API balance (429
-insufficient_quota). Claude Pro / ChatGPT Plus subscriptions do not include API usage.
-Pending: user tops up an API balance or adds a free GEMINI_API_KEY (never put keys in code/files/commits).
+insufficient_quota); Claude Pro / ChatGPT Plus subscriptions do not include API usage. GEMINI_API_KEY (free
+tier) is what generates now: 20 requests per model per day, so the site walks down the Flash models
+(newest first, then -flash-lite), skipping overloaded (503) and used-up ones; checks only list models.
+Keys must never go into code/files/commits.
