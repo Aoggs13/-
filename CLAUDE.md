@@ -25,7 +25,8 @@ https://zhubislide-production.up.railway.app, vars PORT=8000, DATA_DIR=/data, DA
 Railway's GitHub app has no access to this repo, so the service runs image `python:3.13-slim` with a start
 command that downloads a **pinned commit** tarball of this (public) repo, pip-installs and starts uvicorn
 (boot script is base64 in the start command). To ship a new version: push, then update the start command
-with the new commit SHA (`update-service startCommand`) — the service redeploys.
+with the new commit SHA (`update-service startCommand`), then change the `ZS_VERSION` variable — that
+starts a deployment with the new command (a plain `redeploy` may reuse the old one).
 AI keys: any of ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY; the startup check picks the first that
 works and logs `AI check ok|failed`. OPENAI_API_KEY is set but its account has no API balance (429
 insufficient_quota). Claude Pro / ChatGPT Plus subscriptions do not include API usage.
