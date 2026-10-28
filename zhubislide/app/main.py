@@ -33,11 +33,20 @@ _hits: dict[str, deque] = defaultdict(deque)
 _daily: deque = deque()
 
 
+async def _keep_checking() -> None:
+    """Check the AI key at startup and, while it does not work (e.g. empty balance), again every 10 minutes."""
+    while True:
+        await content.self_check()
+        if content.STATUS["ok"]:
+            return
+        await asyncio.sleep(600)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     manager.load()
     log.info("ZhubiSlide started: provider=%s, data=%s", content.provider() or "NONE (no API key)", jobs.DATA_DIR)
-    check = asyncio.create_task(content.self_check())
+    check = asyncio.create_task(_keep_checking())
     yield
     check.cancel()
 
