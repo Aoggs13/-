@@ -130,6 +130,22 @@ def test_on_topic_article_titles():
     assert not images._on_topic("Art", "artificial intelligence robot")
 
 
+def test_commons_stock_photos_are_jpeg_only():
+    logo = "https://upload.wikimedia.org/f/Telecom_company_logo.png"
+    photo = "https://upload.wikimedia.org/g/Fiber_cables.jpg"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"query": {"pages": {
+            "1": {"index": 1, "imageinfo": [{"url": logo, "width": 1437, "height": 1400, "mime": "image/png"}]},
+            "2": {"index": 2, "imageinfo": [{"url": photo, "width": 1600, "height": 1000, "mime": "image/jpeg"}]}}}})
+
+    async def go(subject):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await images._commons(c, "telecommunication network", subject=subject)
+    assert asyncio.run(go(False)) == [photo]               # a logo is not a stock photo
+    assert asyncio.run(go(True)) == [logo, photo]          # an old scanned portrait may be a PNG
+
+
 def test_split_subject():
     assert images.split_subject("Abai Qunanbaiuly | Абай Құнанбайұлы") == ("Abai Qunanbaiuly", "Абай Құнанбайұлы")
     assert images.split_subject("Burabay") == ("Burabay", "Burabay")

@@ -68,8 +68,8 @@ async def _commons(c: httpx.AsyncClient, q: str, subject: bool = False) -> list[
     for p in pages:
         ii = (p.get("imageinfo") or [{}])[0]
         w, h = ii.get("width", 0), ii.get("height", 1)
-        if ii.get("mime") not in ("image/jpeg", "image/png"):
-            continue
+        if ii.get("mime") != "image/jpeg" and not (subject and ii.get("mime") == "image/png"):
+            continue                # stock: photos only (PNGs are logos, maps, diagrams); a subject's may be a scan
         if subject and min(w, h) >= MIN_SIDE_SUBJECT or not subject and w >= 1000 and w >= h * 0.9:
             out.append(ii.get("thumburl") or ii["url"])
     return out
