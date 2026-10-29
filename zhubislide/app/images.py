@@ -179,8 +179,10 @@ async def find_photo(c: httpx.AsyncClient, query: str, used: set[str], subject: 
     if subject.strip():
         attempts += [(src, fn, "", MIN_SIDE_SUBJECT) for src, fn in _subject_sources(subject, lang)]
     if query.strip():
-        queries = [query] + ([" ".join(query.split()[:2])] if len(query.split()) > 2 else [])
-        attempts += [(src, fn, q, MIN_SIDE) for q in queries for src, fn in _stock_sources()]
+        attempts += [(src, fn, query, MIN_SIDE) for src, fn in _stock_sources()]
+        if len(query.split()) > 2:      # a shorter query finds more, but a free-text file search then finds anything
+            short = " ".join(query.split()[:2])
+            attempts += [(src, fn, short, MIN_SIDE) for src, fn in _stock_sources() if src != "commons"]
     for src, fn, q, min_side in attempts:
         if _down.get(src, 0) > time.monotonic():
             continue

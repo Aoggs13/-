@@ -130,6 +130,25 @@ def test_on_topic_article_titles():
     assert not images._on_topic("Art", "artificial intelligence robot")
 
 
+def test_a_shortened_query_never_takes_a_random_commons_file():
+    scan = "https://upload.wikimedia.org/h/Decision_on_a_Telecommunication_Network_Project.jpg"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        q = parse_qs(urlparse(str(request.url)).query).get("gsrsearch", [""])[0]
+        if request.url.host == "commons.wikimedia.org" and q.startswith("telecommunication network filetype"):
+            return httpx.Response(200, json={"query": {"pages": {"1": {"index": 1, "imageinfo": [
+                {"url": scan, "width": 1600, "height": 1000, "mime": "image/jpeg"}]}}}})
+        if request.url.host == "api.openverse.org":
+            return httpx.Response(200, json={"results": []})
+        return httpx.Response(200, json={"query": {"pages": {}}})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await images.find_photo(c, "telecommunication network fiber optics", used, "", "kk", "t")
+    used = set()
+    assert asyncio.run(go()) is None and not used          # theme-coloured art rather than a document scan
+
+
 def test_commons_stock_photos_are_jpeg_only():
     logo = "https://upload.wikimedia.org/f/Telecom_company_logo.png"
     photo = "https://upload.wikimedia.org/g/Fiber_cables.jpg"
