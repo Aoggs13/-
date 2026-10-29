@@ -2,8 +2,8 @@
 
 A slide about a specific person, place or event gets a photo of exactly that subject: its Wikipedia page
 image (English, deck-language and Russian Wikipedia), then more photos of it from Wikimedia Commons.
-Other slides get a stock-style photo: Pexels / Unsplash (if a key is set) → Openverse → the lead photo of an
-English Wikipedia article named after the thing → Wikimedia Commons. When nothing is found, abstract art in the
+Other slides get a stock-style photo: Pexels / Unsplash (if a key is set) → Openverse → Wikimedia Commons →
+the lead photo of an English Wikipedia article about the thing. When nothing is found, abstract art in the
 theme colours is used.
 """
 
@@ -95,15 +95,22 @@ async def _wiki_image(c: httpx.AsyncClient, lang: str, title: str) -> list[str]:
     return []
 
 
+def _stem(w: str) -> str:
+    return w[:-1] if len(w) > 3 and w.endswith("s") else w
+
+
 def _on_topic(title: str, q: str) -> bool:
-    """The article is named after something in the query ("Optical fiber" for "fiber optics"). A big article
-    that merely mentions every word — "Atlanta" for "healthy fresh food vegetables" — is not."""
-    words = [w[:-1] if w.endswith("s") else w for w in re.findall(r"\w{4,}", q.lower())]
-    return any(t.startswith(w) or w.startswith(t) for t in re.findall(r"\w{4,}", title.lower()) for w in words)
+    """The article is about a thing the query names: the head noun of its title ("fiber" in "Optical fiber",
+    "library" in "Library of Congress") is a query word. Not "Food desert" (a city photo) or "Atlanta" (a big
+    article that merely mentions every word) for "healthy fresh food vegetables"."""
+    head = re.split(r" \(|,| of | in | and | for | on ", title.lower())[0].split()
+    h = _stem(head[-1]) if head else ""
+    return bool(h) and any(h == w or min(len(h), len(w)) >= 4 and (h.startswith(w) or w.startswith(h))
+                           for w in map(_stem, re.findall(r"\w{3,}", q.lower())))
 
 
 async def _wiki_search(c: httpx.AsyncClient, q: str) -> list[str]:
-    """Lead photos of the English Wikipedia articles found for a stock query and named after what it shows.
+    """Lead photos of the English Wikipedia articles found for a stock query that are about a thing it names.
     JPEG only: PNG/SVG lead images are maps, diagrams, flags and logos."""
     r = await c.get("https://en.wikipedia.org/w/api.php", headers=UA, params={
         "action": "query", "format": "json", "formatversion": 2, "generator": "search", "gsrsearch": q,
@@ -137,8 +144,8 @@ def _stock_sources():
     if UNSPLASH_KEY:
         yield "unsplash", _unsplash
     yield "openverse", _openverse
+    yield "commons", _commons               # descriptive file names: precise when something matches
     yield "wikipedia", _wiki_search
-    yield "commons", _commons
 
 
 def file_key(url: str) -> str:

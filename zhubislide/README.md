@@ -13,9 +13,10 @@ Website that turns a topic into a designed PowerPoint deck (5–25 slides, Kazak
   fitted (simulated word wrap) so long text stays inside the design.
 - **Real time estimate**: shown per slide count before starting, learned from real runs (stored in
   `/data/stats.json`); during generation the countdown is re-estimated from the observed speed.
-- Other slides get a stock photo: Pexels / Unsplash if a key is set, else Openverse, then the lead photo of the
-  best-matching English Wikipedia article, then Wikimedia Commons. Photos are fetched while the text is still
-  being written; speaker notes; PPTX download; in-browser preview of every slide.
+- Other slides get a stock photo: Pexels / Unsplash if a key is set, else Openverse, then Wikimedia Commons,
+  then the lead photo of an English Wikipedia article about the thing (a failing optional API is skipped for
+  10 minutes). Photos are fetched while the text is still being written; speaker notes; PPTX download;
+  in-browser preview of every slide.
 
 ## Run locally
 ```bash

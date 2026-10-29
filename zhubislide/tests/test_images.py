@@ -70,45 +70,64 @@ def test_without_a_subject_stock_search_is_used():
     assert img.size == (1600, 1000) and used == {images.file_key(STRANGER)}
 
 
-def test_when_openverse_is_down_an_on_topic_wikipedia_article_photo_is_used():
-    city = "https://upload.wikimedia.org/thumb/a/aa/Atlanta_skyline.jpg/1600px-Atlanta_skyline.jpg"
-    diagram = "https://upload.wikimedia.org/thumb/d/dd/Food_pyramid.svg/1600px-Food_pyramid.svg.png"
-    vegetables = "https://upload.wikimedia.org/thumb/c/cc/Vegetables.jpg/1600px-Vegetables.jpg"
-    random_file = "https://upload.wikimedia.org/e/People_at_a_food_fair.jpg"
-    calls = []
+VEGETABLES = "https://upload.wikimedia.org/thumb/c/cc/Vegetables.jpg/1600px-Vegetables.jpg"
+CARROTS = "https://upload.wikimedia.org/e/Fresh_carrots_for_a_healthy_meal.jpg"
 
-    def down(request: httpx.Request) -> httpx.Response:
+
+def stock(commons_files: list[str], calls: list[str]):
+    """Openverse times out; Commons has the given files; Wikipedia search finds a city that mentions every word,
+    an article with a city photo, a diagram and finally the right article."""
+    hits = [("Atlanta", "https://upload.wikimedia.org/thumb/a/aa/Atlanta.jpg/1600px-Atlanta.jpg"),
+            ("Food desert", "https://upload.wikimedia.org/thumb/b/bb/Skyline.jpg/1600px-Skyline.jpg"),
+            ("Healthy diet", "https://upload.wikimedia.org/thumb/d/dd/Pyramid.svg/1600px-Pyramid.svg.png"),
+            ("Vegetable", VEGETABLES)]
+
+    def handler(request: httpx.Request) -> httpx.Response:
         host = request.url.host
         calls.append(host)
         if host == "api.openverse.org":
             raise httpx.ReadTimeout("slow", request=request)
-        if host == "en.wikipedia.org":           # search hits: a city that mentions every word, a diagram, a photo
+        if host == "en.wikipedia.org":
             return httpx.Response(200, json={"query": {"pages": [
-                {"index": 3, "title": "Vegetable", "thumbnail": {"source": vegetables}},
-                {"index": 1, "title": "Atlanta", "thumbnail": {"source": city}},
-                {"index": 2, "title": "Healthy diet", "thumbnail": {"source": diagram}}]}})
+                {"index": i, "title": t, "thumbnail": {"source": u}} for i, (t, u) in enumerate(hits, 1)]}})
         if host == "commons.wikimedia.org":
-            return httpx.Response(200, json={"query": {"pages": {"1": {"index": 1, "imageinfo": [
-                {"url": random_file, "width": 1600, "height": 1000, "mime": "image/jpeg"}]}}}})
+            return httpx.Response(200, json={"query": {"pages": {str(i): {"index": i, "imageinfo": [
+                {"url": u, "width": 1600, "height": 1000, "mime": "image/jpeg"}]} for i, u in enumerate(commons_files)}}})
         return httpx.Response(200, content=jpeg(1600, 1000))
+    return handler
 
+
+def find(handler, used):
     async def go():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(down)) as c:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
             return await images.find_photo(c, "healthy fresh food vegetables", used, "", "kk", "t")
+    return asyncio.run(go())
+
+
+def test_commons_file_comes_before_wikipedia_and_openverse_is_not_waited_for_twice():
+    calls, used = [], set()
+    handler = stock([CARROTS], calls)
+    assert find(handler, used) is not None and used == {images.file_key(CARROTS)}
+    assert find(handler, used) is not None and images.file_key(VEGETABLES) in used   # next slide
+    assert calls.count("api.openverse.org") == 1           # timed out once, then skipped for a while
+
+
+def test_only_an_article_about_the_thing_gives_a_photo():
     used = set()
-    assert asyncio.run(go()) is not None
-    assert used == {images.file_key(vegetables)}          # not the city, not the diagram, not the Commons file
-    assert asyncio.run(go()) is not None                   # next slide: the Commons file
-    assert calls.count("api.openverse.org") == 1           # Openverse timed out once, then it is not waited for
+    assert find(stock([], []), used) is not None
+    assert used == {images.file_key(VEGETABLES)}           # not the city, the skyline or the diagram
+    assert find(stock([], []), used) is None               # nothing else on topic → theme-coloured art
 
 
 def test_on_topic_article_titles():
     assert images._on_topic("Optical fiber", "telecommunication network fiber optics")
     assert images._on_topic("Eurasian Steppe", "kazakh steppe horses")
-    assert images._on_topic("West Kazakhstan Region", "kazakh steppe horses")
     assert images._on_topic("Vegetable", "healthy fresh food vegetables")
+    assert images._on_topic("Library of Congress", "old books library")
+    assert images._on_topic("Solar panel", "solar panels field")
+    assert not images._on_topic("Food desert", "healthy fresh food vegetables")
     assert not images._on_topic("Atlanta", "healthy fresh food vegetables")
-    assert not images._on_topic("Agdz", "healthy fresh food vegetables")
+    assert not images._on_topic("Art", "artificial intelligence robot")
 
 
 def test_split_subject():
