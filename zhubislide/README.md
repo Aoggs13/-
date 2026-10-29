@@ -44,3 +44,4 @@ python -m pytest -q tests           # 54 tests, no network needed
 ## Railway
 Service from this repo with **Root Directory = `zhubislide`** (Dockerfile builder, see `railway.json`),
 a volume mounted at `/data`, variable `ANTHROPIC_API_KEY`, and a generated domain.
+How the live service is deployed today and how to ship an update: [HANDOFF.md](HANDOFF.md).
