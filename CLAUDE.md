@@ -35,3 +35,7 @@ insufficient_quota); Claude Pro / ChatGPT Plus subscriptions do not include API 
 tier) is what generates now: 20 requests per model per day, so the site walks down the Flash models
 (newest first, then -flash-lite), skipping overloaded (503) and used-up ones; checks only list models.
 Keys must never go into code/files/commits.
+Photos: this sandbox cannot reach Wikimedia/Openverse/the site, so check photo picks on the server: set
+`ZS_PHOTO_SELFTEST="English | local; q:stock query"` (startup logs each source's result and the picks), then
+clear it. Seen from Railway: Openverse times out (8 s, then skipped 10 min); stock order is Commons (JPEG only)
+→ Wikipedia search, where an article counts only if its title's head noun is a query word.
