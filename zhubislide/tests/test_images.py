@@ -58,19 +58,25 @@ def test_subject_photo_comes_from_its_wikipedia_article_then_commons():
     used = set()
     subject = "Akhmet Baitursynuly | Ахмет Байтұрсынұлы"
     first = run("kazakh scholar", subject, used)
-    assert first.size == (300, 420) and PORTRAIT in used               # the real portrait, even if small
+    assert first.size == (300, 420) and images.file_key(PORTRAIT) in used     # the real portrait, even if small
     second = run("kazakh scholar", subject, used)
-    assert second.size == (900, 1200) and MONUMENT in used             # then other photos of him
-    assert STRANGER not in used
+    assert second.size == (900, 1200) and images.file_key(MONUMENT) in used   # then other photos of him
+    assert images.file_key(STRANGER) not in used
 
 
 def test_without_a_subject_stock_search_is_used():
     used = set()
     img = run("steppe horses", "", used)
-    assert img.size == (1600, 1000) and used == {STRANGER}
+    assert img.size == (1600, 1000) and used == {images.file_key(STRANGER)}
 
 
 def test_split_subject():
     assert images.split_subject("Abai Qunanbaiuly | Абай Құнанбайұлы") == ("Abai Qunanbaiuly", "Абай Құнанбайұлы")
     assert images.split_subject("Burabay") == ("Burabay", "Burabay")
     assert images.split_subject("") == ("", "")
+
+
+def test_thumbnail_and_original_are_the_same_photo():
+    a = "https://upload.wikimedia.org/wikipedia/commons/4/4c/%D0%90%D1%85%D0%BC%D0%B5%D1%82_(1913).jpg?utm=x"
+    b = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/%D0%90%D1%85%D0%BC%D0%B5%D1%82_(1913).jpg/800px-x.jpg"
+    assert images.file_key(a) == images.file_key(b) == "ахмет_(1913).jpg"

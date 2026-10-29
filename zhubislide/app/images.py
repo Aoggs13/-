@@ -14,6 +14,7 @@ import logging
 import os
 import random
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import httpx
 from PIL import Image, ImageDraw, ImageFilter
@@ -82,12 +83,11 @@ async def _wiki_image(c: httpx.AsyncClient, lang: str, title: str) -> list[str]:
                                                  "gsrlimit": 1, "gsrnamespace": 0})
         r.raise_for_status()
         pages = r.json().get("query", {}).get("pages", [])
-    out = []
     for p in pages[:1]:
         for u in ((p.get("thumbnail") or {}).get("source"), (p.get("original") or {}).get("source")):
-            if u and not u.lower().endswith(".svg") and u not in out:
-                out.append(u)
-    return out
+            if u and ".svg" not in u.lower():
+                return [u]                      # one picture per article: the thumbnail is the same file
+    return []
 
 
 def split_subject(subject: str) -> tuple[str, str]:
@@ -114,6 +114,16 @@ def _stock_sources():
         yield "unsplash", _unsplash
     yield "openverse", _openverse
     yield "commons", _commons
+
+
+def file_key(url: str) -> str:
+    """Same picture, different URL (thumbnail sizes, original, tracking query) → one key, so no photo repeats."""
+    parts = [p for p in urlparse(url).path.split("/") if p]
+    if "thumb" in parts and len(parts) >= parts.index("thumb") + 4:
+        name = parts[parts.index("thumb") + 3]
+    else:
+        name = parts[-1] if parts else url
+    return unquote(name).lower()
 
 
 async def _download(c: httpx.AsyncClient, url: str, min_side: int) -> Image.Image | None:
@@ -146,9 +156,10 @@ async def find_photo(c: httpx.AsyncClient, query: str, used: set[str], subject: 
             log.info("photo source %s failed for %r: %s", src, q or subject, e)
             continue
         for url in urls[:5]:
-            if url in used:
+            key = file_key(url)
+            if key in used:
                 continue
-            used.add(url)               # reserve before awaiting: parallel slides never share a photo
+            used.add(key)               # reserve before awaiting: parallel slides never share a photo
             img = await _download(c, url, min_side)
             if img is not None:
                 log.info("photo %s from %s (%s): %s %dx%d", name, src, subject or q, url, *img.size)

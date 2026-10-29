@@ -21,7 +21,7 @@ Tests: `python -m pytest -q tests` (9 pass; model-dependent ones skip without mo
 Website (no Telegram bot): topic → designed PPTX, 5–25 slides, kk/ru, 5 design styles (modern, classic, bold,
 clean, playful) + 7 palettes + 8 fonts, auto picks by topic; photos of the real subject (Wikipedia page image /
 Commons via `image_subject`); simple 4-question form for non-technical users; live countdown.
-Tests: `cd zhubislide && python -m pytest -q tests` (48 pass, no network).
+Tests: `cd zhubislide && python -m pytest -q tests` (49 pass, no network).
 Railway: service `zhubislide` in project **Sulba Heritage** (free plan blocked a new project), volume `/data`,
 https://zhubislide-production.up.railway.app, vars PORT=8000, DATA_DIR=/data, DAILY_LIMIT=100.
 Railway's GitHub app has no access to this repo, so the service runs image `python:3.13-slim` with a start
