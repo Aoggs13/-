@@ -70,19 +70,23 @@ def test_without_a_subject_stock_search_is_used():
     assert img.size == (1600, 1000) and used == {images.file_key(STRANGER)}
 
 
-def test_when_openverse_is_down_the_matching_wikipedia_article_photo_is_used():
-    vegetables = "https://upload.wikimedia.org/thumb/c/cc/Vegetables.jpg/1600px-Vegetables.jpg"
+def test_when_openverse_is_down_an_on_topic_wikipedia_article_photo_is_used():
+    city = "https://upload.wikimedia.org/thumb/a/aa/Atlanta_skyline.jpg/1600px-Atlanta_skyline.jpg"
     diagram = "https://upload.wikimedia.org/thumb/d/dd/Food_pyramid.svg/1600px-Food_pyramid.svg.png"
+    vegetables = "https://upload.wikimedia.org/thumb/c/cc/Vegetables.jpg/1600px-Vegetables.jpg"
     random_file = "https://upload.wikimedia.org/e/People_at_a_food_fair.jpg"
+    calls = []
 
     def down(request: httpx.Request) -> httpx.Response:
         host = request.url.host
+        calls.append(host)
         if host == "api.openverse.org":
             raise httpx.ReadTimeout("slow", request=request)
-        if host == "en.wikipedia.org":           # search hits: a diagram first, then a real photo
+        if host == "en.wikipedia.org":           # search hits: a city that mentions every word, a diagram, a photo
             return httpx.Response(200, json={"query": {"pages": [
-                {"index": 2, "title": "Vegetable", "thumbnail": {"source": vegetables}},
-                {"index": 1, "title": "Healthy diet", "thumbnail": {"source": diagram}}]}})
+                {"index": 3, "title": "Vegetable", "thumbnail": {"source": vegetables}},
+                {"index": 1, "title": "Atlanta", "thumbnail": {"source": city}},
+                {"index": 2, "title": "Healthy diet", "thumbnail": {"source": diagram}}]}})
         if host == "commons.wikimedia.org":
             return httpx.Response(200, json={"query": {"pages": {"1": {"index": 1, "imageinfo": [
                 {"url": random_file, "width": 1600, "height": 1000, "mime": "image/jpeg"}]}}}})
@@ -93,7 +97,18 @@ def test_when_openverse_is_down_the_matching_wikipedia_article_photo_is_used():
             return await images.find_photo(c, "healthy fresh food vegetables", used, "", "kk", "t")
     used = set()
     assert asyncio.run(go()) is not None
-    assert used == {images.file_key(vegetables)}          # not the diagram, not the random Commons file
+    assert used == {images.file_key(vegetables)}          # not the city, not the diagram, not the Commons file
+    assert asyncio.run(go()) is not None                   # next slide: the Commons file
+    assert calls.count("api.openverse.org") == 1           # Openverse timed out once, then it is not waited for
+
+
+def test_on_topic_article_titles():
+    assert images._on_topic("Optical fiber", "telecommunication network fiber optics")
+    assert images._on_topic("Eurasian Steppe", "kazakh steppe horses")
+    assert images._on_topic("West Kazakhstan Region", "kazakh steppe horses")
+    assert images._on_topic("Vegetable", "healthy fresh food vegetables")
+    assert not images._on_topic("Atlanta", "healthy fresh food vegetables")
+    assert not images._on_topic("Agdz", "healthy fresh food vegetables")
 
 
 def test_split_subject():

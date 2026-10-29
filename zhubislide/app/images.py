@@ -2,9 +2,9 @@
 
 A slide about a specific person, place or event gets a photo of exactly that subject: its Wikipedia page
 image (English, deck-language and Russian Wikipedia), then more photos of it from Wikimedia Commons.
-Other slides get a stock-style photo: Pexels / Unsplash (if a key is set) → Openverse → the lead photo of the
-best-matching English Wikipedia articles → Wikimedia Commons. When nothing is found, abstract art in the theme
-colours is used.
+Other slides get a stock-style photo: Pexels / Unsplash (if a key is set) → Openverse → the lead photo of an
+English Wikipedia article named after the thing → Wikimedia Commons. When nothing is found, abstract art in the
+theme colours is used.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ import io
 import logging
 import os
 import random
+import re
+import time
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -29,6 +31,8 @@ UNSPLASH_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
 MAX_BYTES = 12 * 1024 * 1024
 MIN_SIDE = 400            # stock photos
 MIN_SIDE_SUBJECT = 220    # a real photo of the subject is worth more than resolution (old portraits are small)
+COOL_DOWN = {"pexels", "unsplash", "openverse"}   # optional stock APIs: skipped for 10 min after a failure
+_down: dict[str, float] = {}
 
 
 async def _pexels(c: httpx.AsyncClient, q: str) -> list[str]:
@@ -46,7 +50,7 @@ async def _unsplash(c: httpx.AsyncClient, q: str) -> list[str]:
 
 
 async def _openverse(c: httpx.AsyncClient, q: str) -> list[str]:
-    r = await c.get("https://api.openverse.org/v1/images/", headers=UA,
+    r = await c.get("https://api.openverse.org/v1/images/", headers=UA, timeout=8.0,
                     params={"q": q, "page_size": 10, "size": "large", "category": "photograph", "mature": "false"})
     r.raise_for_status()
     return [p["url"] for p in r.json().get("results", []) if (p.get("width") or 0) >= 1000]
@@ -91,15 +95,22 @@ async def _wiki_image(c: httpx.AsyncClient, lang: str, title: str) -> list[str]:
     return []
 
 
+def _on_topic(title: str, q: str) -> bool:
+    """The article is named after something in the query ("Optical fiber" for "fiber optics"). A big article
+    that merely mentions every word — "Atlanta" for "healthy fresh food vegetables" — is not."""
+    words = [w[:-1] if w.endswith("s") else w for w in re.findall(r"\w{4,}", q.lower())]
+    return any(t.startswith(w) or w.startswith(t) for t in re.findall(r"\w{4,}", title.lower()) for w in words)
+
+
 async def _wiki_search(c: httpx.AsyncClient, q: str) -> list[str]:
-    """Lead photos of the English Wikipedia articles that best match a stock query: always on topic, unlike a
-    free-text file search. JPEG only — PNG/SVG lead images are maps, diagrams, flags and logos."""
+    """Lead photos of the English Wikipedia articles found for a stock query and named after what it shows.
+    JPEG only: PNG/SVG lead images are maps, diagrams, flags and logos."""
     r = await c.get("https://en.wikipedia.org/w/api.php", headers=UA, params={
         "action": "query", "format": "json", "formatversion": 2, "generator": "search", "gsrsearch": q,
-        "gsrlimit": 3, "gsrnamespace": 0, "prop": "pageimages", "piprop": "thumbnail", "pithumbsize": 1600})
+        "gsrlimit": 5, "gsrnamespace": 0, "prop": "pageimages", "piprop": "thumbnail", "pithumbsize": 1600})
     r.raise_for_status()
     pages = sorted(r.json().get("query", {}).get("pages", []), key=lambda p: p.get("index", 99))
-    urls = [(p.get("thumbnail") or {}).get("source", "") for p in pages]
+    urls = [(p.get("thumbnail") or {}).get("source", "") for p in pages if _on_topic(p.get("title", ""), q)]
     return [u for u in urls if urlparse(u).path.lower().endswith((".jpg", ".jpeg"))]
 
 
@@ -164,10 +175,14 @@ async def find_photo(c: httpx.AsyncClient, query: str, used: set[str], subject: 
         queries = [query] + ([" ".join(query.split()[:2])] if len(query.split()) > 2 else [])
         attempts += [(src, fn, q, MIN_SIDE) for q in queries for src, fn in _stock_sources()]
     for src, fn, q, min_side in attempts:
+        if _down.get(src, 0) > time.monotonic():
+            continue
         try:
             urls = await (fn(c, q) if q else fn(c))
         except Exception as e:  # source down / rate limited → try the next one
             log.info("photo source %s failed for %r: %s %s", src, q or subject, type(e).__name__, e)
+            if src in COOL_DOWN:                # e.g. Openverse often times out from the server: don't wait again
+                _down[src] = time.monotonic() + 600
             continue
         for url in urls[:5]:
             key = file_key(url)

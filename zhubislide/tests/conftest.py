@@ -19,3 +19,5 @@ def _fresh_provider_state(monkeypatch):
     monkeypatch.setattr(content, "_bad", {})
     monkeypatch.setattr(content, "OPENAI_MODEL", "")
     monkeypatch.setattr(content, "GEMINI_MODEL", "")
+    from app import images
+    monkeypatch.setattr(images, "_down", {})              # a photo source "down" in one test is up in the next
