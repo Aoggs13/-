@@ -70,6 +70,32 @@ def test_without_a_subject_stock_search_is_used():
     assert img.size == (1600, 1000) and used == {images.file_key(STRANGER)}
 
 
+def test_when_openverse_is_down_the_matching_wikipedia_article_photo_is_used():
+    vegetables = "https://upload.wikimedia.org/thumb/c/cc/Vegetables.jpg/1600px-Vegetables.jpg"
+    diagram = "https://upload.wikimedia.org/thumb/d/dd/Food_pyramid.svg/1600px-Food_pyramid.svg.png"
+    random_file = "https://upload.wikimedia.org/e/People_at_a_food_fair.jpg"
+
+    def down(request: httpx.Request) -> httpx.Response:
+        host = request.url.host
+        if host == "api.openverse.org":
+            raise httpx.ReadTimeout("slow", request=request)
+        if host == "en.wikipedia.org":           # search hits: a diagram first, then a real photo
+            return httpx.Response(200, json={"query": {"pages": [
+                {"index": 2, "title": "Vegetable", "thumbnail": {"source": vegetables}},
+                {"index": 1, "title": "Healthy diet", "thumbnail": {"source": diagram}}]}})
+        if host == "commons.wikimedia.org":
+            return httpx.Response(200, json={"query": {"pages": {"1": {"index": 1, "imageinfo": [
+                {"url": random_file, "width": 1600, "height": 1000, "mime": "image/jpeg"}]}}}})
+        return httpx.Response(200, content=jpeg(1600, 1000))
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(down)) as c:
+            return await images.find_photo(c, "healthy fresh food vegetables", used, "", "kk", "t")
+    used = set()
+    assert asyncio.run(go()) is not None
+    assert used == {images.file_key(vegetables)}          # not the diagram, not the random Commons file
+
+
 def test_split_subject():
     assert images.split_subject("Abai Qunanbaiuly | Абай Құнанбайұлы") == ("Abai Qunanbaiuly", "Абай Құнанбайұлы")
     assert images.split_subject("Burabay") == ("Burabay", "Burabay")

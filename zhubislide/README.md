@@ -13,8 +13,9 @@ Website that turns a topic into a designed PowerPoint deck (5–25 slides, Kazak
   fitted (simulated word wrap) so long text stays inside the design.
 - **Real time estimate**: shown per slide count before starting, learned from real runs (stored in
   `/data/stats.json`); during generation the countdown is re-estimated from the observed speed.
-- Photos per slide from Openverse / Wikimedia Commons (or Pexels / Unsplash if a key is set), fetched while the
-  text is still being written; speaker notes; PPTX download; in-browser preview of every slide.
+- Other slides get a stock photo: Pexels / Unsplash if a key is set, else Openverse, then the lead photo of the
+  best-matching English Wikipedia article, then Wikimedia Commons. Photos are fetched while the text is still
+  being written; speaker notes; PPTX download; in-browser preview of every slide.
 
 ## Run locally
 ```bash
@@ -37,7 +38,7 @@ python -m pytest -q tests           # 48 tests, no network needed
 | `MAX_PARALLEL` | `3` | decks generated at the same time |
 | `SLIDES_PER_BATCH`, `BATCHES_PARALLEL` | `4`, `4` | parallel text generation |
 | `KEEP_DAYS` | `14` | how long decks are kept |
-| `ZS_PHOTO_SELFTEST` | — | "English \| local; …": at startup, log which photo each subject gets (diagnostics) |
+| `ZS_PHOTO_SELFTEST` | — | "English \| local; q:stock query; …": at startup, log which photo each subject or stock query gets (diagnostics) |
 
 ## Railway
 Service from this repo with **Root Directory = `zhubislide`** (Dockerfile builder, see `railway.json`),

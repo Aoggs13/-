@@ -42,17 +42,26 @@ async def _keep_checking() -> None:
         await asyncio.sleep(600)
 
 
-async def _photo_selftest(subjects: str) -> None:
-    """ZS_PHOTO_SELFTEST="English | local; …": log which photo each subject gets (checks the photo sources
-    from the server itself, where they are reachable)."""
+async def _photo_selftest(entries: str) -> None:
+    """ZS_PHOTO_SELFTEST="English | local; q:stock query; …": log which photo each subject or stock query gets,
+    and for a stock query what every source returns and how fast (checks the photo sources from the server
+    itself, where they are reachable)."""
     import httpx
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as c:
-        for subject in filter(None, (x.strip() for x in subjects.split(";"))):
+        for entry in filter(None, (x.strip() for x in entries.split(";"))):
+            query, subject = (entry[2:].strip(), "") if entry.startswith("q:") else ("", entry)
+            for src, fn in images._stock_sources() if query else ():
+                t = time.monotonic()
+                try:
+                    found = (await fn(c, query))[:2]
+                except Exception as e:
+                    found = f"failed: {type(e).__name__}"
+                log.info("photo selftest %s %r: %.1fs %s", src, query, time.monotonic() - t, found)
             used: set[str] = set()
             for n in range(2):
-                img = await images.find_photo(c, "", used, subject, "kk", f"selftest{n}")
-                log.info("photo selftest %r #%d: %s", subject, n + 1, f"{img.size[0]}x{img.size[1]}" if img else "none")
+                img = await images.find_photo(c, query, used, subject, "kk", f"selftest{n}")
+                log.info("photo selftest %r #%d: %s", entry, n + 1, f"{img.size[0]}x{img.size[1]}" if img else "none")
 
 
 @asynccontextmanager

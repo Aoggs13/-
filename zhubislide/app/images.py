@@ -2,8 +2,9 @@
 
 A slide about a specific person, place or event gets a photo of exactly that subject: its Wikipedia page
 image (English, deck-language and Russian Wikipedia), then more photos of it from Wikimedia Commons.
-Other slides get a stock-style photo: Pexels / Unsplash (if a key is set) → Openverse → Wikimedia Commons.
-When nothing is found, abstract art in the theme colours is used.
+Other slides get a stock-style photo: Pexels / Unsplash (if a key is set) → Openverse → the lead photo of the
+best-matching English Wikipedia articles → Wikimedia Commons. When nothing is found, abstract art in the theme
+colours is used.
 """
 
 from __future__ import annotations
@@ -90,6 +91,18 @@ async def _wiki_image(c: httpx.AsyncClient, lang: str, title: str) -> list[str]:
     return []
 
 
+async def _wiki_search(c: httpx.AsyncClient, q: str) -> list[str]:
+    """Lead photos of the English Wikipedia articles that best match a stock query: always on topic, unlike a
+    free-text file search. JPEG only — PNG/SVG lead images are maps, diagrams, flags and logos."""
+    r = await c.get("https://en.wikipedia.org/w/api.php", headers=UA, params={
+        "action": "query", "format": "json", "formatversion": 2, "generator": "search", "gsrsearch": q,
+        "gsrlimit": 3, "gsrnamespace": 0, "prop": "pageimages", "piprop": "thumbnail", "pithumbsize": 1600})
+    r.raise_for_status()
+    pages = sorted(r.json().get("query", {}).get("pages", []), key=lambda p: p.get("index", 99))
+    urls = [(p.get("thumbnail") or {}).get("source", "") for p in pages]
+    return [u for u in urls if urlparse(u).path.lower().endswith((".jpg", ".jpeg"))]
+
+
 def split_subject(subject: str) -> tuple[str, str]:
     """"English title | local title" → (english, local); a single name is used for both."""
     parts = [p.strip() for p in (subject or "").split("|")]
@@ -113,6 +126,7 @@ def _stock_sources():
     if UNSPLASH_KEY:
         yield "unsplash", _unsplash
     yield "openverse", _openverse
+    yield "wikipedia", _wiki_search
     yield "commons", _commons
 
 
@@ -153,7 +167,7 @@ async def find_photo(c: httpx.AsyncClient, query: str, used: set[str], subject: 
         try:
             urls = await (fn(c, q) if q else fn(c))
         except Exception as e:  # source down / rate limited → try the next one
-            log.info("photo source %s failed for %r: %s", src, q or subject, e)
+            log.info("photo source %s failed for %r: %s %s", src, q or subject, type(e).__name__, e)
             continue
         for url in urls[:5]:
             key = file_key(url)
