@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import builder, content, images
-from .themes import AUTO, FONTS, THEMES, resolve
+from .themes import AUTO, FONTS, STYLES, THEMES, resolve, resolve_style
 
 log = logging.getLogger("zhubislide.jobs")
 
@@ -124,6 +124,7 @@ class Job:
     notes: bool
     author: str
     extra: str
+    style: str = AUTO
     created: float = field(default_factory=time.time)
     status: str = "queued"          # queued → outline → writing → images → design → done | error
     progress: float = 0.0
@@ -138,6 +139,7 @@ class Job:
     title: str = ""
     palette: dict = field(default_factory=dict)
     font_used: str = ""
+    style_used: str = ""
     t_stage: float = 0.0
 
     @property
@@ -177,7 +179,8 @@ class Job:
         now = time.time()
         d = {k: getattr(self, k) for k in ("id", "topic", "pages", "lang", "theme", "font", "font_used", "status",
                                            "slides_done", "titles", "images_done", "images_total", "error",
-                                           "title", "created", "photos", "tone", "density", "palette")}
+                                           "title", "created", "photos", "tone", "density", "palette", "style",
+                                           "style_used")}
         d["progress"] = round(self.progress, 1)
         d["elapsed"] = round((self.finished or now) - self.started, 1) if self.started else 0
         d["remaining"] = round(self.remaining())
@@ -260,21 +263,25 @@ class Manager:
         job.titles = [p["title"] for p in plan["plan"]]
         job.palette = {k: theme[k] for k in ("bg", "accent", "accent2", "dark", "surface", "text", "muted")}
         job.font_used = builder.pick_font(job.font, plan)
+        job.style_used = resolve_style(job.style, plan)["key"]
         colors = (theme["bg"][0], theme["accent"], theme["accent2"])
 
         # 2) full text in parallel batches; photos start downloading as soon as their slide is written
-        fetcher = images.Fetcher(job.dir / "img")
+        fetcher = images.Fetcher(job.dir / "img", job.lang)
         img_tasks: dict[str, asyncio.Task] = {}
         job.images_total = 1 + sum(1 for p in plan["plan"] if p["layout"] in builder.IMAGE_LAYOUTS)
 
-        def fetch(name: str, query: str) -> None:
+        def fetch(name: str, query: str, subject: str = "") -> None:
             async def go() -> Path:
-                path = await fetcher.get(name, query if job.photos else "", colors)
+                if job.photos:
+                    path = await fetcher.get(name, query, colors, subject)
+                else:
+                    path = await fetcher.get(name, "", colors)
                 job.images_done += 1
                 return path
             img_tasks[name] = asyncio.create_task(go())
 
-        fetch("cover", plan.get("cover_image_query") or job.topic)
+        fetch("cover", plan.get("cover_image_query") or job.topic, plan.get("cover_subject", ""))
         job.status, job.t_stage, job.progress = "writing", time.time(), 10
 
         async def on_progress(done: int) -> None:
@@ -284,14 +291,15 @@ class Manager:
         async def on_batch(idxs: list[int], slides: list[dict]) -> None:
             for i, s in zip(idxs, slides):
                 if builder.needs_image(s):
-                    fetch(str(i), s.get("image_query") or s["title"])
+                    fetch(str(i), s.get("image_query") or s["title"], s.get("image_subject", ""))
 
         try:
             slides = await content.write_slides(job.topic, job.lang, job.tone, job.density, job.extra, job.notes,
                                                 plan, on_progress, on_batch)
             rounds, k = _rounds(n)
             learn(f"per_slide_{job.density}", ((time.time() - job.t_stage) / rounds - BATCH_FIRST) / k)
-            deck = {key: plan[key] for key in ("design", "title", "subtitle", "cover_image_query", "thanks")}
+            deck = {key: plan.get(key, "") for key in ("design", "title", "subtitle", "cover_image_query",
+                                                         "cover_subject", "thanks")}
             deck["slides"] = slides
             (job.dir / "deck.json").write_text(json.dumps(deck, ensure_ascii=False))
 
@@ -308,26 +316,27 @@ class Manager:
 
         # 4) design
         job.status, job.t_stage, job.progress = "design", time.time(), 93
-        out = self.pptx_path(job, job.theme, job.font)
-        await asyncio.to_thread(builder.build, deck, job.theme, paths, out, job.author, job.font)
+        out = self.pptx_path(job, job.theme, job.font, job.style)
+        await asyncio.to_thread(builder.build, deck, job.theme, paths, out, job.author, job.font, job.style)
         learn("build_per_slide", (time.time() - job.t_stage) / job.pages)
         STATS["runs"] += 1
         save_stats()
 
     @staticmethod
-    def pptx_path(job: Job, theme: str, font: str) -> Path:
-        return job.dir / f"deck_{theme}_{font.replace(' ', '_')}.pptx"
+    def pptx_path(job: Job, theme: str, font: str, style: str) -> Path:
+        return job.dir / f"deck_{style}_{theme}_{font.replace(' ', '_')}.pptx"
 
-    def pptx(self, job: Job, theme: str, font: str) -> Path:
-        """PPTX in any theme/font: the text and photos are reused, only the design is rebuilt."""
+    def pptx(self, job: Job, theme: str, font: str, style: str) -> Path:
+        """PPTX in any style/colours/font: the text and photos are reused, only the design is rebuilt."""
         theme = theme if (theme in THEMES or theme == AUTO) else job.theme
         font = font if (font in FONTS or font == AUTO) else job.font
-        out = self.pptx_path(job, theme, font)
+        style = style if (style in STYLES or style == AUTO) else job.style
+        out = self.pptx_path(job, theme, font, style)
         if not out.exists():
             deck = json.loads((job.dir / "deck.json").read_text())
             paths = {p.stem: p for p in (job.dir / "img").glob("*.jpg") if "_" not in p.stem}
             tmp = out.with_suffix(f".{uuid.uuid4().hex[:6]}.tmp")
-            builder.build(deck, theme, paths, tmp, job.author, font)
+            builder.build(deck, theme, paths, tmp, job.author, font, style)
             tmp.replace(out)
             # keep the disk bounded: only the most recent design variants of a deck are kept
             variants = sorted(job.dir.glob("deck_*.pptx"), key=lambda p: p.stat().st_mtime, reverse=True)

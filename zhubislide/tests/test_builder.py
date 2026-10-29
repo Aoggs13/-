@@ -73,3 +73,36 @@ def test_fit_image_keeps_aspect():
     from PIL import Image
     img = Image.new("RGB", (3000, 1000))
     assert images.fit(img, 800, 600).size == (800, 600)
+
+
+@pytest.mark.parametrize("style_name", ["modern", "classic", "bold", "clean", "playful"])
+def test_every_style_builds_inside_the_slide(tmp_path: Path, style_name: str):
+    t = resolve(AUTO, DECK)
+    out = builder.build(DECK, AUTO, _paths(tmp_path, DECK, (t["bg"][0], t["accent"], t["accent2"])),
+                        tmp_path / "deck.pptx", font_name=AUTO, style_name=style_name)
+    prs = Presentation(out)
+    assert len(prs.slides) == len(DECK["slides"]) + 2
+    for slide in prs.slides:
+        for sh in slide.shapes:
+            if sh.has_text_frame and sh.text_frame.text.strip():
+                assert sh.left >= 0 and sh.top >= 0
+                assert sh.left + sh.width <= prs.slide_width + Emu(10)
+                assert sh.top + sh.height <= prs.slide_height + Emu(10)
+
+
+def test_a_portrait_is_framed_not_stretched(tmp_path: Path):
+    from PIL import Image
+    paths = _paths(tmp_path, DECK, ("000000", "FFFFFF", "888888"))
+    Image.new("RGB", (300, 420), "#886644").save(paths["cover"])       # small old portrait
+    assert builder.is_portrait(paths["cover"])
+    out = builder.build(DECK, "aurora", paths, tmp_path / "deck.pptx", style_name="modern")
+    cover = Presentation(out).slides[0]
+    pics = [sh for sh in cover.shapes if sh.shape_type == 13]           # MSO_SHAPE_TYPE.PICTURE
+    assert len(pics) == 1 and pics[0].width < Presentation(out).slide_width / 2
+
+
+def test_auto_style_comes_from_design():
+    from app.themes import resolve_style
+    assert resolve_style(AUTO, {"design": {"style": "classic"}})["key"] == "classic"
+    assert resolve_style(AUTO, {"design": {"style": "nope"}})["key"] == "modern"
+    assert resolve_style("playful", DECK)["key"] == "playful"

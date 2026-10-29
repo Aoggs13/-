@@ -1,4 +1,4 @@
-/* ZhubiSlide — front-end: form, live progress with real countdown, slide preview, my works. */
+/* ZhubaiSlide — front-end: form, live progress with real countdown, slide preview, my works. */
 "use strict";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -15,13 +15,18 @@ const I18N = {
     nav_create: "Жасау", nav_designs: "Дизайндар", nav_works: "Менің жұмыстарым", nav_how: "Қалай жұмыс істейді", nav_faq: "Сұрақтар",
     badge: "ИИ презентация генераторы · қазақша және орысша",
     h1: "Тақырыпты жаз — <em>дайын презентацияны</em> ал",
-    sub: "ZhubiSlide тақырыпқа сай дизайн таңдайды, толық әрі түсінікті мәтін жазады, суреттер қояды және PowerPoint файлын береді.",
+    sub: "ZhubaiSlide тақырыпқа сай дизайн таңдайды, толық әрі түсінікті мәтін жазады, суреттер қояды және PowerPoint файлын береді.",
     f1: "<b>5–25</b> слайд", f2: "<b>Тақырыпқа сай</b> дизайн", f3: "<b>Нақты</b> уақыт есебі", f4: "<b>.PPTX</b> файл",
     topic: "Тақырып", topic_ph: "Мысалы: Қазақ хандығының құрылуы",
     pages: "Слайд саны", pages_hint: "қасында — дайын болу уақыты",
     slang: "Презентация тілі", density: "Мәтін көлемі",
     d_medium: "Қысқа", d_medium_s: "негізгі ойлар", d_long: "Толық", d_long_s: "түсіндірмемен", d_full: "Өте толық", d_full_s: "толық слайд",
-    design: "Дизайн", design_hint: "Авто — тақырыпқа сай", font: "Қаріп", auto: "Авто", auto_s: "тақырыпқа сай",
+    design: "Дизайн", design_hint: "Білмесеңіз — «Авто» қалсын", font: "Қаріп", auto: "Авто", auto_s: "тақырыпқа сай",
+    how1: "Тақырыпты жазыңыз", how2: "«Презентация жасау» батырмасын басыңыз", how3: "Дайын файлды жүктеп алыңыз",
+    q_topic: "Қандай тақырыпта презентация керек?", q_pages: "Неше бет болсын?", q_lang: "Қай тілде?",
+    q_design: "Дизайнды таңдаңыз", more_s: " — міндетті емес", colors: "Түстер", colors_s: "Авто — тақырыпқа сай",
+    r_style: "Дизайн стилі", dl_hint: "PowerPoint, Google Slides не WPS Office-та ашылады",
+    style_auto_s: "ИИ тақырыпқа қарай таңдайды",
     more: "Қосымша баптаулар", tone: "Кімге арналған / стиль",
     tone_school: "🎒 Мектеп", tone_student: "🎓 Студент", tone_business: "💼 Бизнес", tone_science: "🔬 Ғылыми", tone_creative: "🎨 Шығармашылық",
     photos: "Тақырыпқа сай суреттер", photos_s: "Әр слайдқа сәйкес фото іздейді",
@@ -37,12 +42,14 @@ const I18N = {
     lbl_queued: "кезекте", lbl_outline: "жоспар", lbl_writing: "мәтін", lbl_images: "суреттер", lbl_design: "дизайн", lbl_done: "дайын",
     queue: "Кезекте: {n}-орын. Алдыңғы презентация біткен соң бірден басталады.",
     p_sub: "{pages} слайд · {lang} · шамамен {eta}",
-    picked: "Тақырыпқа сай дизайн таңдалды · қаріп: {font}", picked_preset: "Дизайн: {theme} · қаріп: {font}",
-    new: "Жаңа презентация", download: "PPTX жүктеу", r_design: "Дизайнды ауыстыру", r_font: "Қаріпті ауыстыру",
+    picked: "Тақырыпқа сай дизайн таңдалды: {style} · қаріп: {font}", picked_preset: "Дизайн: {style}, {theme} · қаріп: {font}",
+    style_desc: { modern: "технология, ғылым, бизнес", classic: "тарих, әдебиет, тұлғалар", bold: "спорт, іс-шаралар",
+      clean: "медицина, қаржы, экология", playful: "мектеп, балалар, мерекелер" },
+    new: "Жаңа презентация", download: "PPTX жүктеу", r_design: "Түстерді ауыстыру", r_font: "Қаріпті ауыстыру",
     share: "Сілтеме", copy: "Сілтемені көшіру", copied: "Сілтеме көшірілді",
     speaker: "Баяндамашыға жазба", r_meta: "{n} слайд · <b>{time}</b> ішінде дайын болды",
     designs_t: "Тақырыпқа сай дизайн",
-    designs_s: "«Авто» режимінде ИИ тақырыпты талдап, түстерді, фонды, өрнекті және қаріпті өзі таңдайды. Қаласаң — дайын стильдің бірін таңда.",
+    designs_s: "5 түрлі дизайн стилі бар. «Авто» режимінде ИИ тақырыпқа қарай стильді, түстерді және қаріпті өзі таңдайды; дайын болған соң да бір батырмамен ауыстыруға болады.",
     works_t: "Менің жұмыстарым", works_s: "Осы құрылғыда жасалған презентациялар (серверде 14 күн сақталады)",
     works_empty: "Әзірге бос. Алғашқы презентацияңды жаса!", open: "Ашу",
     how_t: "Қалай жұмыс істейді?", how_s: "Бір-екі минутта — дайын презентация.",
@@ -82,13 +89,18 @@ const I18N = {
     nav_create: "Создать", nav_designs: "Дизайны", nav_works: "Мои работы", nav_how: "Как это работает", nav_faq: "Вопросы",
     badge: "ИИ-генератор презентаций · на казахском и русском",
     h1: "Напиши тему — получи <em>готовую презентацию</em>",
-    sub: "ZhubiSlide подбирает дизайн под тему, пишет полный и понятный текст, добавляет фото и отдаёт файл PowerPoint.",
+    sub: "ZhubaiSlide подбирает дизайн под тему, пишет полный и понятный текст, добавляет фото и отдаёт файл PowerPoint.",
     f1: "<b>5–25</b> слайдов", f2: "Дизайн <b>под тему</b>", f3: "<b>Точное</b> время готовности", f4: "Файл <b>.PPTX</b>",
     topic: "Тема", topic_ph: "Например: Образование Казахского ханства",
     pages: "Количество слайдов", pages_hint: "рядом — время готовности",
     slang: "Язык презентации", density: "Объём текста",
     d_medium: "Кратко", d_medium_s: "главные мысли", d_long: "Подробно", d_long_s: "с пояснениями", d_full: "Максимум", d_full_s: "полный слайд",
-    design: "Дизайн", design_hint: "Авто — под тему", font: "Шрифт", auto: "Авто", auto_s: "под тему",
+    design: "Дизайн", design_hint: "Не знаете — оставьте «Авто»", font: "Шрифт", auto: "Авто", auto_s: "под тему",
+    how1: "Напишите тему", how2: "Нажмите «Создать презентацию»", how3: "Скачайте готовый файл",
+    q_topic: "На какую тему нужна презентация?", q_pages: "Сколько слайдов?", q_lang: "На каком языке?",
+    q_design: "Выберите дизайн", more_s: " — необязательно", colors: "Цвета", colors_s: "Авто — под тему",
+    r_style: "Стиль дизайна", dl_hint: "Открывается в PowerPoint, Google Slides или WPS Office",
+    style_auto_s: "ИИ подберёт под тему",
     more: "Дополнительные настройки", tone: "Для кого / стиль",
     tone_school: "🎒 Школа", tone_student: "🎓 Студент", tone_business: "💼 Бизнес", tone_science: "🔬 Научный", tone_creative: "🎨 Креативный",
     photos: "Фото по теме", photos_s: "Подбирает фото к каждому слайду",
@@ -104,12 +116,14 @@ const I18N = {
     lbl_queued: "в очереди", lbl_outline: "план", lbl_writing: "текст", lbl_images: "фото", lbl_design: "дизайн", lbl_done: "готово",
     queue: "В очереди: {n}-е место. Начнётся сразу после предыдущей презентации.",
     p_sub: "{pages} слайдов · {lang} · примерно {eta}",
-    picked: "Подобран дизайн под тему · шрифт: {font}", picked_preset: "Дизайн: {theme} · шрифт: {font}",
-    new: "Новая презентация", download: "Скачать PPTX", r_design: "Сменить дизайн", r_font: "Сменить шрифт",
+    picked: "Подобран дизайн под тему: {style} · шрифт: {font}", picked_preset: "Дизайн: {style}, {theme} · шрифт: {font}",
+    style_desc: { modern: "технологии, наука, бизнес", classic: "история, литература, личности", bold: "спорт, события",
+      clean: "медицина, финансы, экология", playful: "школа, дети, праздники" },
+    new: "Новая презентация", download: "Скачать PPTX", r_design: "Сменить цвета", r_font: "Сменить шрифт",
     share: "Ссылка", copy: "Скопировать ссылку", copied: "Ссылка скопирована",
     speaker: "Заметка докладчика", r_meta: "{n} слайдов · готово за <b>{time}</b>",
     designs_t: "Дизайн под вашу тему",
-    designs_s: "В режиме «Авто» ИИ анализирует тему и сам подбирает цвета, фон, орнамент и шрифт. Или выберите готовый стиль.",
+    designs_s: "5 разных стилей дизайна. В режиме «Авто» ИИ сам подбирает стиль, цвета и шрифт под тему; после готовности их можно сменить одной кнопкой.",
     works_t: "Мои работы", works_s: "Презентации, созданные на этом устройстве (на сервере хранятся 14 дней)",
     works_empty: "Пока пусто. Создайте первую презентацию!", open: "Открыть",
     how_t: "Как это работает?", how_s: "Готовая презентация за пару минут.",
@@ -185,6 +199,8 @@ const X0 = 0.75, X1 = 12.58, TOP = 2.0, BOTTOM = 6.75;
 const IN = (v) => `${(v * 7.5).toFixed(3)}cqw`;
 const PT = (v) => `${((v * 7.5) / 72).toFixed(3)}cqw`;
 const box = (x, y, w, h) => `left:${IN(x)};top:${IN(y)};width:${IN(w)};height:${IN(h)};`;
+const DEFAULT_STYLE = { key: "modern", bg: "gradient", frame: false, title: "bars", photo: "rounded", card: "rounded", badge: "circle", decor: true, cover: "split" };
+let ST = DEFAULT_STYLE;          // style of the slide being rendered (set by slideHtml)
 
 function fitBox(x, y, w, h, html, max, min, { anchor = "top", align = "left", bold = false, italic = false, color = "", group = "", extra = "" } = {}) {
   const just = anchor === "bottom" ? "flex-end" : anchor === "middle" ? "center" : "flex-start";
@@ -203,14 +219,29 @@ function bodyHtml(lead, items, accent) {
 function rectHtml(x, y, w, h, color, { op = 1, radius = 0, round = false, extra = "" } = {}) {
   return `<div class="abs" style="${box(x, y, w, h)}background:#${color};opacity:${op};border-radius:${round ? "50%" : IN(radius)};${extra}"></div>`;
 }
+function outlineHtml(x, y, w, h, color, width = 1, round = false) {
+  return `<div class="abs" style="${box(x, y, w, h)}border:${PT(width)} solid #${color};border-radius:${round ? "50%" : "0"}"></div>`;
+}
 function heading(t, title, x = X0, w = X1 - X0, max = 32) {
-  return fitBox(x, 0.5, w, 1.12, esc(title), max, 20, { anchor: "bottom", bold: true, extra: "line-height:1.02;" })
-    + rectHtml(x, 1.74, 0.9, 0.07, t.accent, { radius: 0.04 }) + rectHtml(x + 1.0, 1.74, 0.25, 0.07, t.accent2, { radius: 0.04 });
+  const k = ST.title;
+  if (k === "band") {
+    const left = x <= X0 + 0.01 ? 0 : x - 0.35, right = x + w >= X1 - 0.01 ? 13.333 : x + w + 0.2;
+    return rectHtml(left, 0.42, right - left, 1.36, t.accent)
+      + fitBox(x, 0.5, w, 1.2, esc(title), max, 20, { anchor: "middle", bold: true, color: onColor(t.accent), extra: "line-height:1.02;" });
+  }
+  const [tx, tw] = k === "dot" ? [x + 0.42, w - 0.42] : [x, w];
+  let h = fitBox(tx, 0.5, tw, 1.12, esc(title), max, 20, { anchor: "bottom", bold: true, extra: "line-height:1.02;" });
+  if (k === "rule") h += rectHtml(x, 1.79, w, 0.02, t.muted, { op: 0.6 }) + rectHtml(x, 1.72, 0.16, 0.16, t.accent);
+  else if (k === "dot") h += rectHtml(x, 1.3, 0.24, 0.24, t.accent, { round: true });
+  else if (k === "pill") h += rectHtml(x, 1.7, 1.5, 0.15, t.accent, { radius: 0.075 }) + rectHtml(x + 1.62, 1.7, 0.15, 0.15, t.accent2, { round: true });
+  else h += rectHtml(x, 1.74, 0.9, 0.07, t.accent, { radius: 0.04 }) + rectHtml(x + 1.0, 1.74, 0.25, 0.07, t.accent2, { radius: 0.04 });
+  return h;
 }
 function decor(t, seed) {
+  if (!ST.decor) return "";
   const op = t.dark ? 0.16 : 0.11;
   const [a, b] = seed % 2 ? [t.accent, t.accent2] : [t.accent2, t.accent];
-  const p = t.pattern || "blobs";
+  const p = ST.key === "playful" ? "dots" : t.pattern || "blobs";
   if (p === "geometric") {
     const hex = "clip-path:polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%);";
     return rectHtml(11.6, -1.1, 2.6, 2.6, b, { op, extra: hex + `transform:rotate(${15 * (seed % 3)}deg);` })
@@ -231,16 +262,38 @@ function decor(t, seed) {
     ? rectHtml(11.2, -2.0, 3.8, 3.8, a, { op, round: true }) + rectHtml(-1.5, 6.0, 3.0, 3.0, b, { op: op * 0.8, round: true })
     : rectHtml(-1.8, -2.0, 3.8, 3.8, a, { op: op * 0.8, round: true }) + rectHtml(11.4, 5.9, 3.4, 3.4, b, { op, round: true });
 }
-function footer(title, n, total) {
-  return `<div class="foot" style="left:${IN(X0)};width:${IN(8)}">${esc(title)}</div><div class="foot" style="left:${IN(X1 - 1.6)};width:${IN(1.6)};text-align:right">${String(n).padStart(2, "0")} / ${String(total).padStart(2, "0")}</div>`;
+function footer(title, n, total, x0 = X0, x1 = X1) {
+  const w = Math.max(1, Math.min(8, x1 - x0 - 1.9));
+  return `<div class="foot" style="left:${IN(x0)};width:${IN(w)}">${esc(title)}</div><div class="foot" style="left:${IN(x1 - 1.6)};width:${IN(1.6)};text-align:right">${String(n).padStart(2, "0")} / ${String(total).padStart(2, "0")}</div>`;
 }
-function photo(x, y, w, h, url, { radius = 0.3, dark = 1, blur = 0 } = {}) {
+function photo(x, y, w, h, url, { radius = 0.3, dark = 1, blur = 0, round = false } = {}) {
   if (!url) return "";
   const f = `${dark !== 1 ? `brightness(${dark})` : ""} ${blur ? `blur(${blur}cqw)` : ""}`.trim();
-  return `<div class="ph" style="${box(x, y, w, h)}background-image:url('${url}');border-radius:${IN(radius)};${f ? `filter:${f};` : ""}${blur ? "transform:scale(1.08);" : ""}"></div>`;
+  return `<div class="ph" style="${box(x, y, w, h)}background-image:url('${url}');border-radius:${round ? "50%" : IN(radius)};${f ? `filter:${f};` : ""}${blur ? "transform:scale(1.08);" : ""}"></div>`;
+}
+/** A photo in the deck's style: rounded, framed, square or a circle. */
+function photoBox(t, url, x, y, w, h) {
+  if (!url) return "";
+  const k = ST.photo;
+  if (k === "circle") {
+    const d = Math.min(w, h), cx = x + w / 2, cy = y + h / 2;
+    return outlineHtml(cx - d / 2 - 0.13, cy - d / 2 - 0.13, d + 0.26, d + 0.26, t.accent, 2.5, true) + photo(cx - d / 2, cy - d / 2, d, d, url, { round: true });
+  }
+  if (k === "frame") return outlineHtml(x + 0.16, y + 0.16, w, h, t.accent, 1.25) + photo(x, y, w, h, url, { radius: 0 });
+  if (k === "square" || k === "bleed") return photo(x, y, w, h, url, { radius: 0 });
+  return photo(x, y, w, h, url);
 }
 function panel(t, x, y, w, h, border = "") {
-  return `<div class="panel" style="${box(x, y, w, h)}${border ? `border:0.1cqw solid #${border};` : ""}opacity:${t.dark ? 0.88 : 0.95}"></div>`;
+  const k = ST.card, op = t.dark ? 0.88 : 0.95;
+  if (k === "outline") return outlineHtml(x, y, w, h, border || t.muted, 1);
+  if (k === "flat") return `<div class="abs" style="${box(x, y, w, h)}background:#${t.surface};opacity:${op}"></div>`;
+  if (k === "bubble") return `<div class="abs" style="${box(x, y, w, h)}background:#${t.surface};opacity:${op};border:${PT(2.25)} solid #${border || t.accent};border-radius:${IN(Math.min(w, h) * 0.12)}"></div>`;
+  return `<div class="panel" style="${box(x, y, w, h)}${border ? `border:0.1cqw solid #${border};` : ""}opacity:${op}"></div>`;
+}
+function badgeHtml(x, y, n, color) {
+  const label = String(n).padStart(2, "0");
+  if (ST.badge === "text") return `<div class="abs" style="${box(x, y - 0.06, 1.3, 0.74)}font-size:${PT(28)};font-weight:700;color:#${color};display:flex;align-items:center">${label}</div>`;
+  return `<div class="circle" style="${box(x, y, 0.62, 0.62)}background:#${color};color:${onColor(color)};font-size:${PT(14)};${ST.badge === "square" ? "border-radius:0;" : ""}">${label}</div>`;
 }
 function leadLine(t, lead, y = TOP) {
   if (!lead) return { html: "", y };
@@ -248,21 +301,44 @@ function leadLine(t, lead, y = TOP) {
   const h = Math.min(0.95, lines * 0.32 + 0.05);
   return { html: fitBox(X0, y, X1 - X0, h, esc(lead), 17, 11, { color: `#${t.muted}`, extra: "line-height:1.3;" }), y: y + h + 0.22 };
 }
+const meta = (author) => [author, new Date().getFullYear()].filter(Boolean).join(" · ");
 
 const L = {
-  cover(t, deck, img, author) {
-    const meta = [author, new Date().getFullYear()].filter(Boolean).join(" · ");
+  cover(t, deck, img, author, portrait) {
+    const kind = portrait ? "framed" : ST.cover;
+    if (kind === "framed") {
+      return decor(t, 1) + photoBox(t, img, 7.85, 0.85, 4.8, 5.8) + rectHtml(X0, 1.75, 0.12, 3.6, t.accent)
+        + fitBox(1.2, 1.0, 6.2, 2.9, esc(deck.title), 46, 24, { anchor: "bottom", bold: true, extra: "line-height:0.98;" })
+        + fitBox(1.2, 4.1, 6.0, 1.4, esc(deck.subtitle), 19, 12, { color: `#${t.muted}`, extra: "line-height:1.3;" })
+        + fitBox(1.2, 6.2, 6, 0.4, esc(meta(author)), 14, 10, { bold: true, color: `#${t.accent}` });
+    }
+    const metaColor = `#${t.dark ? t.accent2 : "FFFFFF"}`;
+    if (kind === "center") {
+      return photo(0, 0, 13.333, 7.5, img, { radius: 0, dark: 0.5 }) + rectHtml(0, 0, 13.333, 7.5, shadeOf(t), { op: 0.45 })
+        + fitBox(1.3, 1.2, 10.73, 2.75, esc(deck.title), 50, 26, { anchor: "bottom", align: "center", bold: true, color: "#fff", extra: "line-height:0.98;" })
+        + rectHtml(6.17, 4.12, 1.0, 0.08, t.accent)
+        + fitBox(1.8, 4.4, 9.73, 1.2, esc(deck.subtitle), 20, 13, { align: "center", color: "#E5E7EB", extra: "line-height:1.3;" })
+        + fitBox(1.3, 6.2, 10.73, 0.4, esc(meta(author)), 14, 10, { align: "center", bold: true, color: metaColor });
+    }
     return photo(0, 0, 13.333, 7.5, img, { radius: 0, dark: 0.55 })
       + rectHtml(0, 0, 8.6, 7.5, shadeOf(t), { op: 0.6 }) + rectHtml(X0, 1.75, 0.12, 3.6, t.accent)
       + fitBox(1.2, 1.2, 7.1, 2.75, esc(deck.title), 48, 26, { anchor: "bottom", bold: true, color: "#fff", extra: "line-height:0.98;" })
       + fitBox(1.2, 4.15, 7.0, 1.35, esc(deck.subtitle), 20, 13, { color: "#E5E7EB", extra: "line-height:1.3;" })
-      + fitBox(1.2, 6.25, 7, 0.4, esc(meta), 14, 10, { bold: true, color: `#${t.dark ? t.accent2 : "FFFFFF"}` });
+      + fitBox(1.2, 6.25, 7, 0.4, esc(meta(author)), 14, 10, { bold: true, color: metaColor });
   },
   side(t, s, img, right) {
-    const iw = 4.55, ix = right ? 13.333 - 0.6 - iw : 0.6, tx = right ? X0 : 0.6 + iw + 0.5, tw = right ? ix - 0.45 - tx : X1 - tx;
-    return photo(ix, 0.6, iw, 6.1, img) + rectHtml(ix + (right ? 0.3 : iw - 1.0), 6.32, 0.7, 0.7, t.accent, { round: true })
-      + heading(t, s.title, tx, tw, 30)
-      + fitBox(tx, TOP, tw, BOTTOM - TOP, bodyHtml(s.lead, s.bullets, `#${t.accent}`), 20, 10.5);
+    let h = "", ix, iw, tx, tw;
+    if (ST.photo === "bleed") {
+      iw = 5.0; ix = right ? 13.333 - iw : 0;
+      h += photo(ix, 0, iw, 7.5, img, { radius: 0 });
+      tx = right ? X0 : iw + 0.6; tw = right ? ix - 0.5 - tx : X1 - tx;
+    } else {
+      iw = 4.55; ix = right ? 13.333 - 0.6 - iw : 0.6;
+      tx = right ? X0 : 0.6 + iw + 0.5; tw = right ? ix - 0.45 - tx : X1 - tx;
+      h += photoBox(t, img, ix, 0.6, iw, 6.1);
+      if (ST.photo === "rounded") h += rectHtml(ix + (right ? 0.3 : iw - 1.0), 6.32, 0.7, 0.7, t.accent, { round: true });
+    }
+    return h + heading(t, s.title, tx, tw, 30) + fitBox(tx, TOP, tw, BOTTOM - TOP, bodyHtml(s.lead, s.bullets, `#${t.accent}`), 20, 10.5);
   },
   article(t, s) {
     let h = heading(t, s.title), px = X0;
@@ -288,8 +364,8 @@ const L = {
     const headH = parts.some(([hd]) => hd) ? 1.1 : 0, bodyTop = 1.12 + headH;
     parts.forEach(([head, rest], i) => {
       const x = X0 + (cw + gap) * i, color = i % 2 ? t.accent2 : t.accent;
-      h += panel(t, x, top, cw, ch, color) + rectHtml(x + 0.25, top, cw - 0.5, 0.07, color)
-        + `<div class="circle" style="${box(x + 0.3, top + 0.32, 0.62, 0.62)}background:#${color};color:${onColor(color)};font-size:${PT(14)}">${String(i + 1).padStart(2, "0")}</div>`;
+      h += panel(t, x, top, cw, ch, color) + (ST.card !== "outline" ? rectHtml(x + 0.25, top, cw - 0.5, 0.07, color) : "")
+        + badgeHtml(x + 0.3, top + 0.32, i + 1, color);
       if (head) h += fitBox(x + 0.3, top + 1.08, cw - 0.6, headH, esc(head), 19, 11, { bold: true, group: gid + "h", extra: "line-height:1.05;" });
       h += fitBox(x + 0.3, top + bodyTop, cw - 0.6, ch - bodyTop - 0.25, esc(rest), n <= 3 ? 19 : 18, 9.5, { group: gid + "b", color: `#${head ? t.muted : t.text}`, extra: "line-height:1.3;" });
     });
@@ -305,17 +381,26 @@ const L = {
     const sh = rest.join("").length > 220 ? 2.45 : 2.8, vh = 1.05;
     stats.forEach((st, i) => {
       const x = X0 + (cw + gap) * i, color = i % 2 ? t.accent2 : t.accent;
-      h += panel(t, x, top, cw, sh) + rectHtml(x + 0.3, top + sh - 0.07, cw - 0.6, 0.07, color)
+      h += panel(t, x, top, cw, sh, ST.card === "outline" ? color : "") + rectHtml(x + 0.3, top + sh - 0.07, cw - 0.6, 0.07, color)
         + fitBox(x + 0.2, top + 0.15, cw - 0.4, vh, esc(st.value), 50, 16, { anchor: "middle", align: "center", bold: true, color: `#${color}`, extra: "line-height:1;white-space:nowrap;" })
         + fitBox(x + 0.25, top + 0.25 + vh, cw - 0.5, sh - vh - 0.45, esc(st.label), 16, 9.5, { align: "center", extra: "line-height:1.2;" });
     });
     if (rest.length) { const y = top + sh + 0.35; h += fitBox(X0, y, X1 - X0, BOTTOM - y, bulletsHtml(rest, `#${t.accent}`), 19, 10.5); }
     return h;
   },
-  quote(t, s, img) {
+  quote(t, s, img, portrait) {
+    const q = esc(s.quote || s.title);
+    if (portrait) {
+      let h = decor(t, 0) + photoBox(t, img, 8.55, 0.9, 4.1, 5.6)
+        + `<div class="abs" style="${box(0.9, 0.45, 2, 1.6)}font-size:${PT(120)};line-height:1;font-weight:700;color:#${t.accent}">“</div>`
+        + fitBox(1.5, 1.45, 6.6, 3.1, q, 30, 16, { anchor: "middle", italic: true, extra: "line-height:1.3;" });
+      if (s.quote_author) h += rectHtml(1.5, 4.95, 0.6, 0.06, t.accent) + fitBox(2.3, 4.75, 5.8, 0.5, esc(s.quote_author), 18, 12, { anchor: "middle", bold: true, color: `#${t.accent}` });
+      if (s.lead) h += fitBox(1.5, 5.45, 6.6, 1.25, esc(s.lead), 16, 10.5, { color: `#${t.muted}`, extra: "line-height:1.3;" });
+      return h;
+    }
     let h = photo(0, 0, 13.333, 7.5, img, { radius: 0, dark: 0.4 }) + rectHtml(0, 0, 13.333, 7.5, shadeOf(t), { op: 0.4 })
       + `<div class="abs" style="${box(1.1, 0.45, 2, 1.6)}font-size:${PT(140)};line-height:1;font-weight:700;color:#${t.dark ? t.accent : t.accent2}">“</div>`
-      + fitBox(1.8, 1.45, 9.9, 3.1, esc(s.quote || s.title), 34, 18, { anchor: "middle", italic: true, color: "#fff", extra: "line-height:1.3;" });
+      + fitBox(1.8, 1.45, 9.9, 3.1, q, 34, 18, { anchor: "middle", italic: true, color: "#fff", extra: "line-height:1.3;" });
     if (s.quote_author) h += rectHtml(1.8, 4.95, 0.6, 0.06, t.accent) + fitBox(2.6, 4.75, 9, 0.5, esc(s.quote_author), 18, 12, { anchor: "middle", bold: true, color: "#fff" });
     if (s.lead) h += fitBox(1.8, 5.5, 9.9, 1.25, esc(s.lead), 17, 11, { color: "#E5E7EB", extra: "line-height:1.3;" });
     return h;
@@ -324,9 +409,10 @@ const L = {
     let h = heading(t, s.title);
     const ll = leadLine(t, s.lead); h += ll.html;
     const top = ll.y, cw = (X1 - X0 - 0.4) / 2, hh = 0.75, bh = BOTTOM - top - hh - 0.45;
+    const square = ST.card === "flat" || ST.card === "outline";
     [[s.left_title, s.bullets, t.accent], [s.right_title, s.right_bullets, t.accent2]].forEach(([title, items, color], i) => {
       const x = X0 + (cw + 0.4) * i;
-      h += panel(t, x, top, cw, BOTTOM - top) + rectHtml(x, top, cw, hh, color, { radius: 0.19 })
+      h += panel(t, x, top, cw, BOTTOM - top, ST.card === "outline" ? color : "") + rectHtml(x, top, cw, hh, color, { radius: square ? 0 : 0.19 })
         + fitBox(x + 0.35, top, cw - 0.7, hh, esc(title || ""), 20, 12, { anchor: "middle", bold: true, color: onColor(color), extra: "line-height:1.05;" })
         + fitBox(x + 0.35, top + hh + 0.25, cw - 0.7, bh, bulletsHtml(items || [], `#${color}`), 18, 10, { group: gid + "c" });
     });
@@ -342,14 +428,20 @@ const L = {
     items.forEach((it, i) => {
       const k = it.indexOf(":"), head = k > 0 && k <= 30 ? it.slice(0, k).trim() : String(i + 1), rest = k > 0 && k <= 30 ? it.slice(k + 1).trim() : it;
       const cx = X0 + step * i + step / 2, color = i % 2 ? t.accent2 : t.accent;
-      h += `<div class="circle" style="${box(cx - 0.2, lineY - 0.18, 0.4, 0.4)}background:#${color};border:0.25cqw solid #${t.bg[0]}"></div>`
+      h += `<div class="circle" style="${box(cx - 0.2, lineY - 0.18, 0.4, 0.4)}background:#${color};border:0.25cqw solid #${t.bg[0]};${ST.badge === "square" ? "border-radius:0;" : ""}"></div>`
         + fitBox(cx - bw / 2, top, bw, 0.6, esc(head), 20, 11, { anchor: "bottom", align: "center", bold: true, color: `#${color}`, group: gid + "h" })
         + panel(t, cx - bw / 2, boxTop, bw, boxH)
         + fitBox(cx - bw / 2 + 0.15, boxTop + 0.15, bw - 0.3, boxH - 0.3, esc(rest), n <= 4 ? 17 : 16, 10, { align: "center", group: gid + "b", extra: "line-height:1.3;" });
     });
     return h;
   },
-  thanks(t, deck, img) {
+  thanks(t, deck, img, portrait) {
+    if (portrait) {
+      return decor(t, 1)
+        + fitBox(1, 2.1, 11.33, 1.8, esc(deck.thanks || "Рахмет!"), 54, 30, { anchor: "middle", align: "center", bold: true })
+        + rectHtml(6.07, 4.05, 1.2, 0.08, t.accent, { radius: 0.04 })
+        + fitBox(1.5, 4.35, 10.33, 1.0, esc(deck.title), 20, 13, { align: "center", color: `#${t.muted}` });
+    }
     return photo(0, 0, 13.333, 7.5, img, { radius: 0, dark: 0.45, blur: 1.2 }) + rectHtml(0, 0, 13.333, 7.5, shadeOf(t), { op: 0.35 })
       + fitBox(1, 2.1, 11.33, 1.8, esc(deck.thanks || "Рахмет!"), 54, 30, { anchor: "middle", align: "center", bold: true, color: "#fff" })
       + rectHtml(6.07, 4.05, 1.2, 0.08, t.accent, { radius: 0.04 })
@@ -362,29 +454,35 @@ const IMAGE_LAYOUTS = new Set(["image_right", "image_left", "quote"]);
 /** One slide as HTML. idx: -1 cover, 0..n-1 content, n thanks. */
 function slideHtml(ctx, idx) {
   const { deck, theme: t } = ctx;
+  ST = ctx.style || DEFAULT_STYLE;
   const n = deck.slides.length, total = n + 2;
   const vars = `--s-bg1:#${t.bg[0]};--s-bg2:#${t.bg[1]};--s-text:#${t.text};--s-muted:#${t.muted};--s-accent:#${t.accent};--s-accent2:#${t.accent2};--s-surface:#${t.surface};--s-font:${ctx.fontCss};--angle:${t.angle || 135}deg`;
-  let inner;
-  if (idx < 0) inner = L.cover(t, deck, ctx.img("cover"), ctx.author);
-  else if (idx >= n) inner = L.thanks(t, deck, ctx.img("cover"));
+  const portrait = (name) => (ctx.portraits || new Set()).has(name);
+  let inner = ST.frame ? outlineHtml(0.22, 0.22, 13.333 - 0.44, 7.5 - 0.44, t.accent, 0.75) : "";
+  if (idx < 0) inner += L.cover(t, deck, ctx.img("cover"), ctx.author, portrait("cover"));
+  else if (idx >= n) inner += L.thanks(t, deck, ctx.img("cover"), portrait("cover"));
   else {
     const s = deck.slides[idx];
     let layout = s.layout;
     const img = ctx.img(String(idx));
     if (IMAGE_LAYOUTS.has(layout) && !img) layout = "article";
     const gid = `g${idx}`;
-    inner = layout === "quote" ? "" : decor(t, idx);
+    inner += layout === "quote" ? "" : decor(t, idx);
     inner += layout === "image_right" ? L.side(t, s, img, true)
       : layout === "image_left" ? L.side(t, s, img, false)
-      : layout === "quote" ? L.quote(t, s, img)
+      : layout === "quote" ? L.quote(t, s, img, portrait(String(idx)))
       : layout === "stats" ? L.stats(t, s, gid)
       : layout === "two_column" ? L.two(t, s, gid)
       : layout === "timeline" ? L.timeline(t, s, gid)
       : layout === "cards" ? L.cards(t, s, gid)
       : L.article(t, s);
-    if (layout !== "quote") inner += footer(deck.title, idx + 2, total);
+    if (layout !== "quote") {
+      const bleed = ST.photo === "bleed" && (layout === "image_right" || layout === "image_left");
+      const free = !bleed ? [X0, X1] : layout === "image_right" ? [X0, 13.333 - 5.0 - 0.5] : [5.6, X1];
+      inner += footer(deck.title, idx + 2, total, ...free);
+    }
   }
-  return `<div class="slide ${t.dark ? "dark" : ""}" style="${vars}">${inner}</div>`;
+  return `<div class="slide ${t.dark ? "dark" : ""} ${ST.bg === "solid" ? "solid" : ""}" style="${vars}">${inner}</div>`;
 }
 
 /** Shrinks every .fit box until its content fits (same idea as fit() in the PPTX builder). */
@@ -407,14 +505,14 @@ function fitAll(root) {
 /* ───────────────────────── state ───────────────────────── */
 const S = {
   meta: null,
-  form: Object.assign({ pages: 10, lang: UI, density: "long", theme: "auto", font: "auto", tone: "student", photos: true, notes: true }, store.get("zs_form", {})),
+  form: Object.assign({ pages: 10, lang: UI, density: "long", theme: "auto", font: "auto", style: "auto", tone: "student", photos: true, notes: true }, store.get("zs_form", {})),
   job: null, poll: null, tick: null, lastPoll: 0,
-  result: null, cur: 0, rTheme: "auto", rFont: "auto",
+  result: null, cur: 0, rTheme: "auto", rFont: "auto", rStyle: "auto",
 };
 
 function saveForm() {
-  const { pages, lang, density, theme, font, tone, photos, notes } = S.form;
-  store.set("zs_form", { pages, lang, density, theme, font, tone, photos, notes });
+  const { pages, lang, density, theme, font, style, tone, photos, notes } = S.form;
+  store.set("zs_form", { pages, lang, density, theme, font, style, tone, photos, notes });
 }
 
 /* ───────────────────────── i18n apply ───────────────────────── */
@@ -427,7 +525,7 @@ function applyI18n() {
   $("#examples").innerHTML = I18N[UI].examples.map((e) => `<button type="button">${esc(e)}</button>`).join("");
   $("#faq-list").innerHTML = I18N[UI].faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("");
   $("#tones").innerHTML = TONES.map((k) => `<button type="button" class="chip ${S.form.tone === k ? "on" : ""}" data-v="${k}">${tr("tone_" + k)}</button>`).join("");
-  if (S.meta) { renderChoices(); renderGallery(); updateEta(); }
+  if (S.meta) { $("#styles").dataset.key = ""; renderChoices(); renderGallery(); updateEta(); }
   renderWorks();
   if (S.job) renderProgress(S.job);
   if (S.result) renderResultHead();
@@ -444,8 +542,37 @@ function themeButton(key, on) {
   const th = S.meta.themes[key];
   return `<button type="button" class="theme ${on ? "on" : ""}" data-v="${key}"><div class="sw" style="background:linear-gradient(135deg,#${th.bg[0]},#${th.bg[1]});--a:#${th.accent};--a2:#${th.accent2}"></div><span>${esc(themeName(key))}</span></button>`;
 }
+const STYLE_PALETTE = { modern: "aurora", classic: "noir", bold: "sunset", clean: "minimal", playful: "steppe" };
+function styleName(key) {
+  if (key === "auto") return tr("auto");
+  const st = S.meta?.styles[key];
+  return st ? st.name[UI] || st.name.kk : key;
+}
+function sampleDeck() {
+  return { title: tr("sample_title"), subtitle: "", thanks: "",
+    slides: [{ layout: "cards", title: tr("sample_title"), lead: tr("sample_lead"), bullets: I18N[UI].sample_b }] };
+}
+/** A mini slide in the given style; the palette is the chosen one, or a typical one for the style. */
+function stylePreview(key, palette = "auto") {
+  const theme = S.meta.themes[palette] || S.meta.themes[STYLE_PALETTE[key]] || Object.values(S.meta.themes)[0];
+  const ctx = { deck: sampleDeck(), theme, style: { key, ...S.meta.styles[key] }, author: "", fontCss: "Arial, sans-serif", img: () => "" };
+  return slideHtml(ctx, 0);
+}
+function styleCards(selected, palette, small = false) {
+  const auto = `<button type="button" class="style-card auto ${selected === "auto" ? "on" : ""}" data-v="auto"><div class="pv">✨</div><span>${tr("auto")}<small>${tr("style_auto_s")}</small></span></button>`;
+  return auto + Object.keys(S.meta.styles).map((k) => `<button type="button" class="style-card ${selected === k ? "on" : ""}" data-v="${k}"><div class="pv">${stylePreview(k, palette)}</div><span>${esc(styleName(k))}${small ? "" : `<small>${esc(I18N[UI].style_desc[k])}</small>`}</span></button>`).join("");
+}
+function renderStyles() {
+  const f = S.form, key = `${UI}|${f.theme}|${f.style}`;
+  const el = $("#styles");
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.innerHTML = styleCards(f.style, f.theme);
+  requestAnimationFrame(() => fitAll(el));
+}
 function renderChoices() {
   const m = S.meta, f = S.form;
+  renderStyles();
   $("#pages").innerHTML = m.pages.map((p) => {
     const e = m.estimates[f.density][p][f.photos ? "1" : "0"].seconds;
     return `<button type="button" class="chip ${f.pages === p ? "on" : ""}" data-v="${p}"><b>${p}</b><small>≈ ${fmtClock(e)}</small></button>`;
@@ -486,7 +613,7 @@ function bindForm() {
     if (key === "tone") $$("#tones .chip").forEach((c) => c.classList.toggle("on", c.dataset.v === S.form.tone));
   });
   pick("#pages", "pages", Number); pick("#slang", "lang"); pick("#density", "density");
-  pick("#themes", "theme"); pick("#fonts", "font"); pick("#tones", "tone");
+  pick("#themes", "theme"); pick("#fonts", "font"); pick("#tones", "tone"); pick("#styles", "style");
   $("#photos").addEventListener("change", (e) => { S.form.photos = e.target.checked; saveForm(); renderChoices(); updateEta(); });
   $("#notes").addEventListener("change", (e) => { S.form.notes = e.target.checked; saveForm(); });
   $("#author").value = store.get("zs_author", "");
@@ -504,7 +631,7 @@ async function submit() {
     const f = S.form;
     const res = await fetch("/api/jobs", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, pages: f.pages, lang: f.lang, theme: f.theme, font: f.font, tone: f.tone, density: f.density,
+      body: JSON.stringify({ topic, pages: f.pages, lang: f.lang, theme: f.theme, font: f.font, style: f.style, tone: f.tone, density: f.density,
         photos: f.photos, notes: f.notes, author: $("#author").value.trim(), extra: $("#extra").value.trim() }),
     });
     const data = await res.json().catch(() => ({}));
@@ -584,7 +711,8 @@ function renderProgress(j) {
   if (pal && pal.bg) {
     dp.classList.add("on");
     $("#pick-dots").innerHTML = [pal.bg[0], pal.bg[1], pal.accent, pal.accent2].map((c) => `<i style="background:#${c}"></i>`).join("");
-    $("#pick-text").textContent = j.theme === "auto" ? tr("picked", { font: j.font_used }) : tr("picked_preset", { theme: themeName(j.theme), font: j.font_used });
+    const styleUsed = styleName(j.style_used || j.style || "modern");
+    $("#pick-text").textContent = j.theme === "auto" ? tr("picked", { style: styleUsed, font: j.font_used }) : tr("picked_preset", { style: styleUsed, theme: themeName(j.theme), font: j.font_used });
   } else dp.classList.remove("on");
   const done = j.status === "writing" ? j.slides_done : si > 1 ? j.titles.length : 0;
   $("#titles").innerHTML = (j.titles || []).map((title, i) => {
@@ -600,7 +728,7 @@ async function loadResult(job) {
   if (!r || !r.ok) { showPane("form"); showAlert(tr("err_not_found")); return; }
   const data = await r.json();
   S.result = { job, ...data, imgs: new Set(data.images) };
-  S.rTheme = data.theme; S.rFont = data.font; S.cur = 0;
+  S.rTheme = data.theme; S.rFont = data.font; S.rStyle = data.style || "auto"; S.cur = 0;
   showPane("result");
   renderResultHead();
   renderSideControls();
@@ -609,8 +737,11 @@ async function loadResult(job) {
 function resultCtx(res = S.result) {
   const theme = S.rTheme === "auto" ? res.auto_theme : S.meta.themes[S.rTheme];
   const fontName = S.rFont === "auto" ? res.auto_font : S.rFont;
+  const styleKey = S.rStyle === "auto" ? res.auto_style || "modern" : S.rStyle;
   return {
     deck: res.deck, theme, author: res.author, fontName,
+    style: { key: styleKey, ...S.meta.styles[styleKey] },
+    portraits: new Set(res.portraits || []),
     fontCss: S.meta.fonts[fontName] || "Arial, sans-serif",
     img: (name) => (res.imgs.has(name) ? `/api/jobs/${res.job.id}/img/${name}` : ""),
   };
@@ -621,6 +752,12 @@ function renderResultHead() {
   $("#r-meta").innerHTML = tr("r_meta", { n: deck.slides.length + 2, time: esc(fmtHuman(job.elapsed)) });
 }
 function renderSideControls() {
+  const rs = $("#r-styles"), key = `${UI}|${S.rTheme}|${S.rStyle}`;
+  if (rs.dataset.key !== key) {
+    rs.dataset.key = key;
+    rs.innerHTML = styleCards(S.rStyle, S.rTheme === "auto" ? "auto" : S.rTheme, true);
+    requestAnimationFrame(() => fitAll(rs));
+  }
   $("#r-themes").innerHTML = ["auto", ...Object.keys(S.meta.themes)].map((k) => themeButton(k, S.rTheme === k)).join("");
   $("#r-font").innerHTML = [`<option value="auto">✨ ${tr("auto")} (${esc(S.result.auto_font)})</option>`,
     ...Object.keys(S.meta.fonts).map((f) => `<option value="${esc(f)}" ${S.rFont === f ? "selected" : ""}>${esc(f)}</option>`)].join("");
@@ -629,7 +766,7 @@ function renderSideControls() {
 }
 function updateDownload() {
   const id = S.result.job.id;
-  $("#dl").href = `/api/jobs/${id}/download?theme=${encodeURIComponent(S.rTheme)}&font=${encodeURIComponent(S.rFont)}`;
+  $("#dl").href = `/api/jobs/${id}/download?theme=${encodeURIComponent(S.rTheme)}&font=${encodeURIComponent(S.rFont)}&style=${encodeURIComponent(S.rStyle)}`;
 }
 function renderViewer() {
   const ctx = resultCtx();
@@ -638,8 +775,9 @@ function renderViewer() {
   $("#stage").innerHTML = slideHtml(ctx, S.cur - 1);
   $("#counter").textContent = `${S.cur + 1} / ${n}`;
   const thumbs = $("#thumbs");
-  if (thumbs.dataset.key !== `${S.result.job.id}|${S.rTheme}|${S.rFont}`) {
-    thumbs.dataset.key = `${S.result.job.id}|${S.rTheme}|${S.rFont}`;
+  const tkey = `${S.result.job.id}|${S.rTheme}|${S.rFont}|${S.rStyle}`;
+  if (thumbs.dataset.key !== tkey) {
+    thumbs.dataset.key = tkey;
     thumbs.innerHTML = Array.from({ length: n }, (_, i) => `<button data-i="${i}">${slideHtml(ctx, i - 1)}</button>`).join("");
     requestAnimationFrame(() => fitAll(thumbs));
   }
@@ -665,6 +803,10 @@ function bindResult() {
     S.rTheme = b.dataset.v; renderSideControls(); renderViewer();
   });
   $("#r-font").addEventListener("change", (e) => { S.rFont = e.target.value; updateDownload(); renderViewer(); });
+  $("#r-styles").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-v]"); if (!b) return;
+    S.rStyle = b.dataset.v; renderSideControls(); renderViewer();
+  });
   $("#new-btn").addEventListener("click", () => { S.result = null; S.job = null; history.pushState(null, "", "#create"); showPane("form"); $("#topic").focus(); });
   $("#copy").addEventListener("click", async () => {
     const url = `${location.origin}/#/p/${S.result.job.id}`;
@@ -710,15 +852,9 @@ function renderWorks() {
 
 /* ───────────────────────── designs gallery ───────────────────────── */
 function renderGallery() {
-  const sample = (title) => ({
-    title, subtitle: "", thanks: "",
-    slides: [{ layout: "cards", title, lead: tr("sample_lead"), bullets: I18N[UI].sample_b }],
-  });
   $("#auto-explain").innerHTML = I18N[UI].autoex.map((x) => `<div><div class="pal">${x.p.map((c) => `<i style="background:#${c}"></i>`).join("")}</div><b>✨ ${esc(x.t)}</b>${esc(x.d)}</div>`).join("");
-  $("#gallery").innerHTML = Object.entries(S.meta.themes).map(([k, th]) => {
-    const ctx = { deck: sample(tr("sample_title")), theme: th, author: "", fontCss: "Arial, sans-serif", img: () => "" };
-    return `<figure>${slideHtml(ctx, 0)}<figcaption>${esc(th.name[UI] || th.name.kk)}<small>${th.dark ? "dark" : "light"}</small></figcaption></figure>`;
-  }).join("");
+  // the five design styles, each in a typical palette; colours can be changed in "more settings"
+  $("#gallery").innerHTML = Object.keys(S.meta.styles).map((k) => `<figure>${stylePreview(k)}<figcaption>${esc(styleName(k))}<small>${esc(I18N[UI].style_desc[k])}</small></figcaption></figure>`).join("");
   requestAnimationFrame(() => fitAll($("#gallery")));
 }
 
@@ -740,6 +876,7 @@ async function boot() {
   if (!S.meta.pages.includes(S.form.pages)) S.form.pages = 10;
   if (S.form.theme !== "auto" && !S.meta.themes[S.form.theme]) S.form.theme = "auto";
   if (S.form.font !== "auto" && !S.meta.fonts[S.form.font]) S.form.font = "auto";
+  if (S.form.style !== "auto" && !S.meta.styles[S.form.style]) S.form.style = "auto";
   renderChoices(); renderGallery(); updateEta();
   if (!S.meta.ready) showAlert(tr("err_not_configured"), true);
   else if (S.meta.ai && S.meta.ai.ok === false && ["auth", "quota"].includes(S.meta.ai.error)) showAlert(tr("err_" + S.meta.ai.error), true);

@@ -148,3 +148,31 @@ def resolve(name: str, deck: dict | None) -> dict:
     if name == AUTO and deck and isinstance(deck.get("design"), dict):
         return from_design(deck["design"])
     return THEMES.get(name) or THEMES[DEFAULT_THEME]
+
+
+# Visual systems, independent of the palette: how backgrounds, titles, photos, cards and numbers look.
+STYLES: dict[str, dict] = {
+    "modern": {"name": {"kk": "Заманауи", "ru": "Современный"}, "bg": "gradient", "frame": False,
+               "title": "bars", "photo": "rounded", "card": "rounded", "badge": "circle", "decor": True,
+               "cover": "split"},
+    "classic": {"name": {"kk": "Классикалық", "ru": "Классика"}, "bg": "solid", "frame": True,
+                "title": "rule", "photo": "frame", "card": "outline", "badge": "text", "decor": False,
+                "cover": "framed"},
+    "bold": {"name": {"kk": "Батыл", "ru": "Яркий"}, "bg": "solid", "frame": False,
+             "title": "band", "photo": "bleed", "card": "flat", "badge": "square", "decor": False,
+             "cover": "center"},
+    "clean": {"name": {"kk": "Таза", "ru": "Чистый"}, "bg": "solid", "frame": False,
+              "title": "dot", "photo": "square", "card": "flat", "badge": "text", "decor": False,
+              "cover": "framed"},
+    "playful": {"name": {"kk": "Көңілді", "ru": "Игривый"}, "bg": "gradient", "frame": False,
+                "title": "pill", "photo": "circle", "card": "bubble", "badge": "circle", "decor": True,
+                "cover": "center"},
+}
+DEFAULT_STYLE = "modern"
+
+
+def resolve_style(name: str, deck: dict | None) -> dict:
+    """Style by name, or for "auto" the one chosen for the topic."""
+    if name == AUTO:
+        name = ((deck or {}).get("design") or {}).get("style", "")
+    return {"key": name if name in STYLES else DEFAULT_STYLE, **STYLES.get(name, STYLES[DEFAULT_STYLE])}

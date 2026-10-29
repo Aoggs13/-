@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ZhubiSlide — ИИ презентация генераторы</title>
-  <meta name="description" content="Тақырыпты жаз — ZhubiSlide 5–25 беттік әдемі презентацияны қазақша не орысша жасап береді: тақырыпқа сай дизайн, суреттер, толық мәтін, PPTX.">
+  <title>ZhubaiSlide — ИИ презентация генераторы</title>
+  <meta name="description" content="Тақырыпты жаз — ZhubaiSlide 5–25 беттік әдемі презентацияны қазақша не орысша жасап береді: тақырыпқа сай дизайн, суреттер, толық мәтін, PPTX.">
   <meta name="theme-color" content="#07071a">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=3">
+  <link rel="stylesheet" href="/style.css?v=6">
 </head>
 <body>
 <div class="bg-mesh"><span></span><span></span><span></span></div>
@@ -18,7 +18,7 @@
 
 <header class="top">
   <div class="wrap">
-    <a class="logo" href="#"><img src="/favicon.svg" alt=""><span>Zhubi<b>Slide</b></span></a>
+    <a class="logo" href="#"><img src="/favicon.svg" alt=""><span>Zhubai<b>Slide</b></span></a>
     <nav class="nav" id="nav">
       <a href="#create" data-i18n="nav_create"></a>
       <a href="#designs" data-i18n="nav_designs"></a>
@@ -43,71 +43,38 @@
       </div>
 
       <div class="studio">
-        <!-- 1. form -->
+        <!-- 1. form: four simple questions, the rest under "more settings" -->
         <div class="pane on" id="pane-form">
           <div id="form-alert"></div>
+          <ol class="howto">
+            <li><b>1</b><span data-i18n="how1"></span></li>
+            <li><b>2</b><span data-i18n="how2"></span></li>
+            <li><b>3</b><span data-i18n="how3"></span></li>
+          </ol>
+          <div class="field">
+            <label for="topic" class="q"><span><span class="num">1</span><span data-i18n="q_topic"></span></span><small id="topic-count">0 / 300</small></label>
+            <textarea id="topic" maxlength="300" data-i18n-ph="topic_ph"></textarea>
+            <div class="examples" id="examples"></div>
+          </div>
           <div class="form-grid">
             <div>
               <div class="field">
-                <label for="topic"><span><span class="num">1</span><span data-i18n="topic"></span></span><small id="topic-count">0 / 300</small></label>
-                <textarea id="topic" maxlength="300" data-i18n-ph="topic_ph"></textarea>
-                <div class="examples" id="examples"></div>
-              </div>
-              <div class="field">
-                <div class="label"><span><span class="num">2</span><span data-i18n="pages"></span></span><small data-i18n="pages_hint"></small></div>
+                <div class="label q"><span><span class="num">2</span><span data-i18n="q_pages"></span></span><small data-i18n="pages_hint"></small></div>
                 <div class="chips pages" id="pages"></div>
               </div>
               <div class="field">
-                <div class="label"><span><span class="num">3</span><span data-i18n="slang"></span></span></div>
+                <div class="label q"><span><span class="num">3</span><span data-i18n="q_lang"></span></span></div>
                 <div class="chips two" id="slang">
                   <button class="chip row" data-v="kk"><span class="flag">🇰🇿</span>Қазақша</button>
                   <button class="chip row" data-v="ru"><span class="flag">🇷🇺</span>Русский</button>
                 </div>
               </div>
-              <div class="field">
-                <div class="label"><span><span class="num">4</span><span data-i18n="density"></span></span></div>
-                <div class="chips three" id="density">
-                  <button class="chip" data-v="medium"><b data-i18n="d_medium"></b><small data-i18n="d_medium_s"></small></button>
-                  <button class="chip" data-v="long"><b data-i18n="d_long"></b><small data-i18n="d_long_s"></small></button>
-                  <button class="chip" data-v="full"><b data-i18n="d_full"></b><small data-i18n="d_full_s"></small></button>
-                </div>
-              </div>
             </div>
-
             <div>
               <div class="field">
-                <div class="label"><span><span class="num">5</span><span data-i18n="design"></span></span><small data-i18n="design_hint"></small></div>
-                <div class="themes" id="themes"></div>
+                <div class="label q"><span><span class="num">4</span><span data-i18n="q_design"></span></span><small data-i18n="design_hint"></small></div>
+                <div class="styles" id="styles"></div>
               </div>
-              <div class="field">
-                <div class="label"><span><span class="num">6</span><span data-i18n="font"></span></span></div>
-                <div class="fonts" id="fonts"></div>
-              </div>
-
-              <details class="more" id="more">
-                <summary>⚙️ <span data-i18n="more"></span><span class="chev">▾</span></summary>
-                <div class="in">
-                  <div>
-                    <div class="label" data-i18n="tone"></div>
-                    <div class="tones" id="tones"></div>
-                  </div>
-                  <div>
-                    <label class="toggle"><span><span data-i18n="photos"></span><small data-i18n="photos_s"></small></span>
-                      <span class="switch"><input type="checkbox" id="photos" checked><i></i></span></label>
-                    <label class="toggle"><span><span data-i18n="notes"></span><small data-i18n="notes_s"></small></span>
-                      <span class="switch"><input type="checkbox" id="notes" checked><i></i></span></label>
-                  </div>
-                  <div>
-                    <div class="label"><span data-i18n="author"></span></div>
-                    <input type="text" id="author" maxlength="80" data-i18n-ph="author_ph">
-                  </div>
-                  <div>
-                    <div class="label"><span data-i18n="extra"></span></div>
-                    <textarea id="extra" rows="2" maxlength="500" data-i18n-ph="extra_ph"></textarea>
-                  </div>
-                </div>
-              </details>
-
             </div>
           </div>
           <div class="go-row">
@@ -124,6 +91,43 @@
               <div class="hint" id="eta-hint"></div>
             </div>
           </div>
+          <details class="more" id="more">
+            <summary>⚙️ <span data-i18n="more"></span><small data-i18n="more_s"></small><span class="chev">▾</span></summary>
+            <div class="in more-grid">
+              <div>
+                <div class="label" data-i18n="density"></div>
+                <div class="chips three" id="density">
+                  <button class="chip" data-v="medium"><b data-i18n="d_medium"></b><small data-i18n="d_medium_s"></small></button>
+                  <button class="chip" data-v="long"><b data-i18n="d_long"></b><small data-i18n="d_long_s"></small></button>
+                  <button class="chip" data-v="full"><b data-i18n="d_full"></b><small data-i18n="d_full_s"></small></button>
+                </div>
+              </div>
+              <div>
+                <div class="label" data-i18n="tone"></div>
+                <div class="tones" id="tones"></div>
+              </div>
+              <div>
+                <div class="label"><span data-i18n="colors"></span><small data-i18n="colors_s"></small></div>
+                <div class="themes" id="themes"></div>
+              </div>
+              <div>
+                <div class="label" data-i18n="font"></div>
+                <div class="fonts" id="fonts"></div>
+              </div>
+              <div>
+                <label class="toggle"><span><span data-i18n="photos"></span><small data-i18n="photos_s"></small></span>
+                  <span class="switch"><input type="checkbox" id="photos" checked><i></i></span></label>
+                <label class="toggle"><span><span data-i18n="notes"></span><small data-i18n="notes_s"></small></span>
+                  <span class="switch"><input type="checkbox" id="notes" checked><i></i></span></label>
+              </div>
+              <div>
+                <div class="label"><span data-i18n="author"></span></div>
+                <input type="text" id="author" maxlength="80" data-i18n-ph="author_ph">
+                <div class="label" style="margin-top:14px"><span data-i18n="extra"></span></div>
+                <textarea id="extra" rows="2" maxlength="500" data-i18n-ph="extra_ph"></textarea>
+              </div>
+            </div>
+          </details>
         </div>
 
         <!-- 2. progress -->
@@ -181,6 +185,11 @@
             </div>
             <div class="side">
               <a class="btn primary dl" id="dl" href="#">⬇ <span data-i18n="download"></span></a>
+              <div class="hint dl-hint" data-i18n="dl_hint"></div>
+              <div class="box">
+                <h4 data-i18n="r_style"></h4>
+                <div class="styles small" id="r-styles"></div>
+              </div>
               <div class="box">
                 <h4 data-i18n="r_design"></h4>
                 <div class="themes" id="r-themes"></div>
@@ -240,11 +249,11 @@
 
 <footer>
   <div class="wrap">
-    <span>© <span id="year"></span> ZhubiSlide</span>
+    <span>© <span id="year"></span> ZhubaiSlide</span>
     <span data-i18n="foot"></span>
   </div>
 </footer>
 <div class="toast" id="toast"></div>
-<script src="/app.js?v=5"></script>
+<script src="/app.js?v=6"></script>
 </body>
 </html>

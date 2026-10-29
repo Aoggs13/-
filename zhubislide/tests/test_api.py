@@ -36,7 +36,7 @@ def client(tmp_path, monkeypatch):
                 await on_batch([i], [out[-1]])
         return out
 
-    async def find_photo(c, q, used):
+    async def find_photo(c, q, used, subject="", lang="kk", name=""):
         return Image.new("RGB", (1200, 800), "#336699")
 
     monkeypatch.setattr(content, "outline", outline)

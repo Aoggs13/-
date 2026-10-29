@@ -1,4 +1,4 @@
-"""ZhubiSlide web app: FastAPI API + static single-page site."""
+"""ZhubaiSlide web app: FastAPI API + static single-page site."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import builder, content, jobs
-from .themes import AUTO, FONTS, THEMES, resolve
+from . import builder, content, images, jobs
+from .themes import AUTO, FONTS, STYLES, THEMES, resolve, resolve_style
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("zhubislide")
@@ -42,16 +42,32 @@ async def _keep_checking() -> None:
         await asyncio.sleep(600)
 
 
+async def _photo_selftest(subjects: str) -> None:
+    """ZS_PHOTO_SELFTEST="English | local; …": log which photo each subject gets (checks the photo sources
+    from the server itself, where they are reachable)."""
+    import httpx
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as c:
+        for subject in filter(None, (x.strip() for x in subjects.split(";"))):
+            used: set[str] = set()
+            for n in range(2):
+                img = await images.find_photo(c, "", used, subject, "kk", f"selftest{n}")
+                log.info("photo selftest %r #%d: %s", subject, n + 1, f"{img.size[0]}x{img.size[1]}" if img else "none")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     manager.load()
-    log.info("ZhubiSlide started: provider=%s, data=%s", content.provider() or "NONE (no API key)", jobs.DATA_DIR)
+    log.info("ZhubaiSlide started: provider=%s, data=%s", content.provider() or "NONE (no API key)", jobs.DATA_DIR)
     check = asyncio.create_task(_keep_checking())
+    selftest = os.environ.get("ZS_PHOTO_SELFTEST", "")
+    tasks = [check] + ([asyncio.create_task(_photo_selftest(selftest))] if selftest else [])
     yield
-    check.cancel()
+    for task in tasks:
+        task.cancel()
 
 
-app = FastAPI(title="ZhubiSlide", docs_url=None, redoc_url=None, lifespan=lifespan)
+app = FastAPI(title="ZhubaiSlide", docs_url=None, redoc_url=None, lifespan=lifespan)
 
 
 class NewJob(BaseModel):
@@ -60,6 +76,7 @@ class NewJob(BaseModel):
     lang: str = "kk"
     theme: str = AUTO
     font: str = AUTO
+    style: str = AUTO
     tone: str = "student"
     density: str = "long"
     photos: bool = True
@@ -105,6 +122,7 @@ async def healthz():
 async def meta():
     return {
         "themes": THEMES,
+        "styles": STYLES,
         "fonts": {name: f["css"] for name, f in FONTS.items()},
         "pages": jobs.PAGES,
         # seconds for every (pages, density, photos) combination, so the page shows the time instantly
@@ -127,6 +145,7 @@ async def estimate(pages: int, photos: bool = True, density: str = "long"):
 async def create_job(body: NewJob, request: Request):
     if body.pages not in jobs.PAGES or body.lang not in ("kk", "ru") or (body.theme not in THEMES and body.theme != AUTO) \
             or (body.font not in FONTS and body.font != AUTO) \
+            or (body.style not in STYLES and body.style != AUTO) \
             or body.tone not in content.TONES or body.density not in content.DENSITY:
         raise HTTPException(400, "bad_params")
     if not content.provider():
@@ -160,8 +179,11 @@ async def job_deck(job_id: str):
     imgs = sorted(p.stem for p in (job.dir / "img").glob("*.jpg") if "_" not in p.stem) \
         if (job.dir / "img").exists() else []
     deck = json.loads(f.read_text())
-    return {"deck": deck, "images": imgs, "theme": job.theme, "font": job.font, "author": job.author,
-            "auto_theme": resolve(AUTO, deck), "auto_font": builder.pick_font(AUTO, deck)}
+    return {"deck": deck, "images": imgs, "theme": job.theme, "font": job.font, "style": job.style,
+            "author": job.author, "auto_theme": resolve(AUTO, deck), "auto_font": builder.pick_font(AUTO, deck),
+            "auto_style": resolve_style(AUTO, deck)["key"],
+            # portraits are framed rather than stretched: the preview needs to know which images are portraits
+            "portraits": [n for n in imgs if builder.is_portrait(job.dir / "img" / f"{n}.jpg")]}
 
 
 @app.get("/api/jobs/{job_id}/img/{name}")
@@ -176,15 +198,15 @@ async def job_image(job_id: str, name: str):
 
 
 @app.get("/api/jobs/{job_id}/download")
-async def job_download(job_id: str, theme: str | None = None, font: str | None = None):
+async def job_download(job_id: str, theme: str | None = None, font: str | None = None, style: str | None = None):
     job = _job(job_id)
     if job.status != "done":
         raise HTTPException(409, "not_ready")
-    path = await asyncio.to_thread(manager.pptx, job, theme or job.theme, font or job.font)
-    name = re.sub(r"[\\/:*?\"<>|\n\r]+", " ", job.title or job.topic).strip()[:80] or "ZhubiSlide"
+    path = await asyncio.to_thread(manager.pptx, job, theme or job.theme, font or job.font, style or job.style)
+    name = re.sub(r"[\\/:*?\"<>|\n\r]+", " ", job.title or job.topic).strip()[:80] or "ZhubaiSlide"
     return FileResponse(
         path, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={"Content-Disposition": f"attachment; filename=\"ZhubiSlide.pptx\"; "
+        headers={"Content-Disposition": f"attachment; filename=\"ZhubaiSlide.pptx\"; "
                                         f"filename*=UTF-8''{quote(name + '.pptx')}"})
 
 

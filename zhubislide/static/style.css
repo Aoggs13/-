@@ -242,7 +242,7 @@ textarea:focus, input[type=text]:focus { border-color: var(--v); box-shadow: 0 0
 section.block { padding: 70px 0 10px; }
 .block h2.t { font-family: var(--display); font-size: clamp(28px, 4vw, 42px); letter-spacing: -0.03em; margin: 0 0 10px; text-align: center; }
 .block p.st { text-align: center; color: var(--muted); margin: 0 auto 34px; max-width: 640px; }
-.gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .gallery figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
 .gallery figcaption { padding: 10px 14px; font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
 .gallery figcaption small { color: var(--dim); font-weight: 500; }
@@ -292,7 +292,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
 .slide .lead { color: var(--s-muted); margin-bottom: 0.75em; line-height: 1.32; font-size: 1.06em; }
 .slide .panel { position: absolute; background: var(--s-surface); border-radius: 1.4cqw; }
 .slide.dark .panel { opacity: .92; }
-.slide .ph { position: absolute; background: center/cover no-repeat; }
+.slide .ph { position: absolute; background: center 20% / cover no-repeat; }
+.slide.solid { background: var(--s-bg1); }
 .slide .shade { position: absolute; inset: 0; }
 .slide .orn { position: absolute; border-radius: 50%; }
 .slide .foot { position: absolute; bottom: 2.1cqw; font-size: 0.94cqw; font-weight: 700; color: var(--s-muted); letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -327,3 +328,37 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
   .hero { padding-top: 40px; }
 }
 @media (min-width: 761px) { .nav .lang-switch { display: none; } }
+
+/* ───── simple form: steps strip, big questions, design cards ───── */
+.howto { list-style: none; margin: 0 0 22px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.howto li { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.05); border: 1px solid var(--line); font-size: 15px; font-weight: 600; }
+.howto b { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); color: #fff; font-size: 15px; }
+.q { font-size: 17px !important; }
+.q .num { width: 26px; height: 26px; font-size: 14px; }
+.styles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.style-card { border: 2px solid var(--line-2); border-radius: 14px; padding: 0; overflow: hidden; cursor: pointer; background: rgba(0,0,0,.25); text-align: left; transition: .18s; }
+.style-card:hover { transform: translateY(-2px); border-color: rgba(139,92,246,.6); }
+.style-card .pv { pointer-events: none; }
+.style-card .pv .slide { border-radius: 0; }
+.style-card span { display: block; padding: 7px 10px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.style-card span small { display: block; font-weight: 500; font-size: 11px; color: var(--dim); }
+.style-card.on { border-color: transparent; background: linear-gradient(var(--bg2), var(--bg2)) padding-box, var(--grad) border-box; box-shadow: 0 10px 30px -12px rgba(139,92,246,.9); }
+.style-card.on span { color: #fff; }
+.style-card.auto .pv { aspect-ratio: 16 / 9; display: grid; place-items: center; font-size: 30px; background: conic-gradient(from 200deg, #8b5cf6, #22d3ee, #34d399, #fbbf24, #f472b6, #8b5cf6); }
+.styles.small { grid-template-columns: repeat(2, 1fr); }
+.styles.small .style-card span { font-size: 12px; padding: 5px 8px; }
+.styles.small .style-card span small { display: none; }
+.more > summary small { color: var(--dim); font-weight: 500; font-size: 12.5px; }
+.more-grid { grid-template-columns: 1fr 1fr; column-gap: 28px; }
+.dl-hint { margin: -4px 0 4px; }
+@media (max-width: 1000px) { .more-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .howto { grid-template-columns: 1fr; }
+  .styles { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px) {
+  .howto { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .howto li { flex-direction: column; text-align: center; gap: 6px; padding: 10px 6px; font-size: 12.5px; line-height: 1.3; }
+  .howto b { width: 26px; height: 26px; font-size: 13px; }
+  #topic-count { display: none; }
+}

@@ -20,7 +20,7 @@ import anthropic
 import httpx2
 import openai
 
-from .themes import FONTS
+from .themes import FONTS, STYLES
 
 # fonts "auto" may pick: present wherever PowerPoint or Google Slides opens the file (Segoe UI is Windows-only,
 # Courier New does not suit slides); every FONTS entry stays available as a manual choice
@@ -51,6 +51,7 @@ DESIGN = _obj({
     "bg1": _STR, "bg2": _STR, "accent": _STR, "accent2": _STR,
     "pattern": {"type": "string", "enum": ["blobs", "geometric", "lines", "dots"]},
     "font": {"type": "string", "enum": AUTO_FONTS},
+    "style": {"type": "string", "enum": list(STYLES)},
 })
 
 OUTLINE_SCHEMA = _obj({
@@ -58,6 +59,7 @@ OUTLINE_SCHEMA = _obj({
     "title": _STR,
     "subtitle": _STR,
     "cover_image_query": _STR,
+    "cover_subject": _STR,
     "thanks": _STR,
     "plan": {"type": "array", "items": _obj({
         "layout": {"type": "string", "enum": LAYOUTS},
@@ -77,6 +79,7 @@ SLIDE = _obj({
     "quote_author": _STR,
     "stats": {"type": "array", "items": _obj({"value": _STR, "label": _STR})},
     "image_query": _STR,
+    "image_subject": _STR,
     "notes": _STR,
 })
 SLIDES_SCHEMA = _obj({"slides": {"type": "array", "items": SLIDE}})
@@ -102,8 +105,18 @@ SYSTEM = """You are a top presentation author and subject expert. You write deck
 understand without a speaker: complete, clear sentences (never telegraphic fragments of 2-3 words), logical
 storyline, accurate facts, concrete examples. Never invent statistics, dates or quotes: use only
 well-established facts; if unsure, write a qualitative statement instead. All visible text is in the requested
-language. image_query fields are short ENGLISH stock-photo search phrases (2-4 concrete nouns, e.g.
-"kazakh steppe horses", "solar panels field") that match the slide and the overall topic."""
+language.
+
+Photos must show what the slide is really about:
+- image_subject / cover_subject: when the slide (or, for the cover, the whole deck) is about a specific real
+  person, place, building, organisation, event, book or artwork, give it as
+  "English Wikipedia title | title in the deck language", e.g. "Akhmet Baitursynuly | Ахмет Байтұрсынұлы",
+  "Burabay National Park | Бурабай", "Abai Qunanbaiuly | Абай Құнанбайұлы". The photo is then taken from that
+  article, so for a deck about a person use that person (or their work, monument, museum) on most slides.
+  Leave it "" for general ideas.
+- image_query: a short ENGLISH stock-photo search phrase of 2-4 concrete nouns ("kazakh steppe horses",
+  "old books library", "solar panels field") used when there is no subject. Never ask for generic people,
+  faces or portraits — a random person must never stand in for a real one."""
 
 LAYOUT_GUIDE = """Layouts:
 - image_right / image_left: text + a photo. Use for about half of the slides, alternate sides.
@@ -465,6 +478,10 @@ accent/accent2: vivid highlight colours (hex) that contrast with the background;
 (soft/organic), geometric (tech/business/science), lines (strict/academic/history), dots (playful/school).
 font: Times New Roman or Cambria for history, literature, law, classic/academic topics; Calibri for tech,
 business, modern topics; Verdana or Tahoma for school/children; Arial when neutral.
+style (the visual system): classic — history, biographies, literature, culture heritage, law; modern —
+technology, science, business, space; bold — sport, marketing, events, bright modern culture; clean —
+medicine, finance, ecology, minimal academic topics; playful — school, children, holidays, fun topics.
+"cover_subject": see the photo rules (e.g. the person the deck is about), else "".
 "subtitle": one sentence. "thanks": a short closing phrase (e.g. "Назарларыңызға рахмет!").
 {("Wishes from the author: " + extra) if extra else ""}"""
     return await _stream_json(SYSTEM, prompt, OUTLINE_SCHEMA, None, 16000)
@@ -489,11 +506,12 @@ Write the full text of ONLY these {len(idxs)} slides, in this order, in "slides"
 Text amount: {DENSITY.get(density, DENSITY['long'])}
 Write complete, understandable sentences with explanations and examples — no 2-3 word fragments.
 Per layout (fill unused fields with "" or []):
-- image_right / image_left / article: title, lead, bullets, image_query (article: image_query "").
+- image_right / image_left / article: title, lead, bullets, image_query, image_subject (article: both "").
 - cards: title, lead (1 sentence), bullets = 3-4 items written as "Short heading: 1-2 explanatory sentences".
 - stats: title, lead, stats = 3-4 items (value is short: "1991", "70%", "2,7 млн км²"; label 3-8 words),
   bullets = 1-2 sentences explaining what the numbers mean.
-- quote: quote (real, exact), quote_author, lead = 1-2 sentences on what it means for the topic, image_query.
+- quote: quote (real, exact), quote_author, lead = 1-2 sentences on what it means for the topic, image_query;
+  image_subject = the quote's author when they are a real, known person.
 - two_column: title, lead (1 sentence), left_title + bullets vs right_title + right_bullets (3-4 sentences each).
 - timeline: title, lead (1 sentence), bullets = 4-5 items "Year or stage: 1-2 sentences about it".
 Keep each slide's given title. "notes": {"3-4 sentences the speaker can say, adding details not on the slide" if notes else "always \"\""}.

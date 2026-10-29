@@ -17,9 +17,11 @@ Tests: `python -m pytest -q tests` (9 pass; model-dependent ones skip without mo
 4. Deploy, watch logs for `bot started`, then ask the user to send `/start` and a photo.
 5. Remind the user to rotate the token in @BotFather (/revoke) afterwards — the old one was pasted in chat once.
 
-## ZhubiSlide (folder `zhubislide/`, branch `zhubislide`)
-Website (no Telegram bot): topic → designed PPTX, 5–25 slides, kk/ru, auto topic design + presets, 8 fonts,
-full text, live countdown. Tests: `cd zhubislide && python -m pytest -q tests` (32 pass, no network).
+## ZhubaiSlide (folder `zhubislide/`, branch `zhubislide`) — the user renamed it from ZhubiSlide
+Website (no Telegram bot): topic → designed PPTX, 5–25 slides, kk/ru, 5 design styles (modern, classic, bold,
+clean, playful) + 7 palettes + 8 fonts, auto picks by topic; photos of the real subject (Wikipedia page image /
+Commons via `image_subject`); simple 4-question form for non-technical users; live countdown.
+Tests: `cd zhubislide && python -m pytest -q tests` (48 pass, no network).
 Railway: service `zhubislide` in project **Sulba Heritage** (free plan blocked a new project), volume `/data`,
 https://zhubislide-production.up.railway.app, vars PORT=8000, DATA_DIR=/data, DAILY_LIMIT=100.
 Railway's GitHub app has no access to this repo, so the service runs image `python:3.13-slim` with a start
