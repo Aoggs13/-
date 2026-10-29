@@ -23,7 +23,7 @@ Website that turns a topic into a designed PowerPoint deck (5–25 slides, Kazak
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY; never commit it
 uvicorn app.main:app --reload
-python -m pytest -q tests           # 48 tests, no network needed
+python -m pytest -q tests           # 52 tests, no network needed
 ```
 
 ## Environment
