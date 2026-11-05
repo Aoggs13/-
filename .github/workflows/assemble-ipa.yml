@@ -23,7 +23,7 @@ jobs:
 
       - name: Verify SHA
         run: |
-          EXPECTED=8e4d2b018f2ba8d684ced24b0ba0edfaf587100618f9fb92c10210c182ac9177
+          EXPECTED=58f14d8eaf4b7c7dd21f46af3171d62a90704de7d28d9fdcfef21504fa7f7590
           ACTUAL=$(sha256sum FreeFire_Hardened.ipa | awk '{print $1}')
           echo "expected: $EXPECTED"
           echo "actual:   $ACTUAL"
@@ -36,7 +36,7 @@ jobs:
           name: Free Fire Hardened
           body: |
             v2 - minimal byte-level LC_ID_DYLIB rewrite, LC_CODE_SIGNATURE preserved.
-            SHA256: 8e4d2b018f2ba8d684ced24b0ba0edfaf587100618f9fb92c10210c182ac9177
+            SHA256: 58f14d8eaf4b7c7dd21f46af3171d62a90704de7d28d9fdcfef21504fa7f7590
           files: FreeFire_Hardened.ipa
           draft: false
           prerelease: false
