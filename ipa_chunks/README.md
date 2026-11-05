@@ -1,35 +1,29 @@
-# Free Fire — Hardened IPA (chunked)
+# Free Fire — Hardened IPA v2 (минималды өзгертулер)
 
-Файл 951 MB — GitHub single-file лимиті 100 MB, сондықтан 11 бөлшекке бөлінген.
+v1 бұзылған болатын: `llvm-install-name-tool` `LC_CODE_SIGNATURE`-ны стрипип жіберген, eSign dylib-ты қайта қолтаңбалай алмай қалған → ойын крэш.
+
+v2 — байт деңгейде LC_ID_DYLIB атын ғана қайта жазу, қолтаңба структурасы орнында, өлшем бит-дәл сақталған.
 
 ## Не өзгертілген
-- `Monite.dylib` → `GameCore.dylib` атауы
-- `LC_ID_DYLIB`: `/Library/MobileSubstrate/DynamicLibraries/Monite.dylib` → `@executable_path/Frameworks/GameCore.dylib`
-- Main binary `LC_LOAD_WEAK_DYLIB` сілтемесі жаңа атауға жаңартылды
-- `SignedByEsign` маркер файлы өшірілді
-- `LC_CODE_SIGNATURE` алынды (eSign қайта қолтаңбалайды)
+- `Monite.dylib` ішіндегі `LC_ID_DYLIB`: `/Library/MobileSubstrate/DynamicLibraries/Monite.dylib` → `@executable_path/Frameworks/Monite.dylib` (padded nulls)
+- `SignedByEsign` маркер файлы жойылды
 
-## Біріктіру
+## Не өзгермеген
+- Файл атауы `Monite.dylib` (өзгертпедім)
+- `FreeFire` негізгі binary — бит-дәл оригинал
+- `LC_CODE_SIGNATURE` командасы мен структурасы орнында (eSign стандартты түрде қайта қолтаңбалайды)
+- Monite функционалы (heartbeat native restore + меню)
 
-**macOS / Linux / iOS (a-Shell, iSH):**
-```bash
-cat FreeFire_Hardened.ipa.part*.bin > FreeFire_Hardened.ipa
-sha256sum -c FreeFire_Hardened.ipa.sha256   # сәйкестікті тексер
+## SHA256
+```
+ea7d17bc9cdb75bc3ac218f30b5e9f8dfcdbd2bb5d6d946edb5979443e59153b
 ```
 
-**Windows (PowerShell):**
-```powershell
-cmd /c "copy /b FreeFire_Hardened.ipa.part00.bin+FreeFire_Hardened.ipa.part01.bin+FreeFire_Hardened.ipa.part02.bin+FreeFire_Hardened.ipa.part03.bin+FreeFire_Hardened.ipa.part04.bin+FreeFire_Hardened.ipa.part05.bin+FreeFire_Hardened.ipa.part06.bin+FreeFire_Hardened.ipa.part07.bin+FreeFire_Hardened.ipa.part08.bin+FreeFire_Hardened.ipa.part09.bin+FreeFire_Hardened.ipa.part10.bin FreeFire_Hardened.ipa"
+## Жүктеу
+Бір файл — release-тен:
+```
+https://github.com/Aoggs13/-/releases/download/hardened-v1/FreeFire_Hardened.ipa
 ```
 
 ## Орнату
-eSign / AltStore / Sideloadly / TrollStore арқылы `FreeFire_Hardened.ipa`-ны орнат.
-
-## Патч нұсқасы (альтернатива)
-Егер өзіңнің оригинал IPA-ң болса, толық файлды жүктеп алмай-ақ `patched_only/` ішіндегі екі файлды алмастыруға болады:
-1. Оригинал IPA-ны ашу (zip ретінде)
-2. `Payload/FreeFire.app/Frameworks/Monite.dylib` → өшір
-3. `patched_only/GameCore.dylib` → `Payload/FreeFire.app/Frameworks/` ішіне көшір
-4. `Payload/FreeFire.app/FreeFire` → `patched_only/FreeFire` мен ауыстыр
-5. `Payload/FreeFire.app/SignedByEsign` → өшір
-6. Қайта zip жасап `.ipa` кеңейтімі қой
+eSign арқылы орнат. AltStore / Sideloadly / TrollStore де жарайды.
