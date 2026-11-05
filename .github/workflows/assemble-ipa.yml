@@ -1,0 +1,42 @@
+name: Assemble Hardened IPA
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hardened-ipa
+
+      - name: Concatenate chunks
+        run: |
+          cd ipa_chunks
+          cat FreeFire_Hardened.ipa.part*.bin > ../FreeFire_Hardened.ipa
+          cd ..
+          sha256sum FreeFire_Hardened.ipa
+          ls -lh FreeFire_Hardened.ipa
+
+      - name: Verify SHA
+        run: |
+          EXPECTED=03247af1c65f3736207da85e1f9e179d0968eeb4016f49328f51b2ffc5b6d118
+          ACTUAL=$(sha256sum FreeFire_Hardened.ipa | awk '{print $1}')
+          echo "expected: $EXPECTED"
+          echo "actual:   $ACTUAL"
+          [ "$EXPECTED" = "$ACTUAL" ] || { echo "SHA mismatch!"; exit 1; }
+
+      - name: Upload as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: hardened-v1
+          name: Free Fire Hardened
+          body: |
+            Monite -> GameCore rename, strings nulled, eSign marker dropped.
+            SHA256: 03247af1c65f3736207da85e1f9e179d0968eeb4016f49328f51b2ffc5b6d118
+          files: FreeFire_Hardened.ipa
+          draft: false
+          prerelease: false
