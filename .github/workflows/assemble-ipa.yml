@@ -23,7 +23,7 @@ jobs:
 
       - name: Verify SHA
         run: |
-          EXPECTED=03247af1c65f3736207da85e1f9e179d0968eeb4016f49328f51b2ffc5b6d118
+          EXPECTED=ea7d17bc9cdb75bc3ac218f30b5e9f8dfcdbd2bb5d6d946edb5979443e59153b
           ACTUAL=$(sha256sum FreeFire_Hardened.ipa | awk '{print $1}')
           echo "expected: $EXPECTED"
           echo "actual:   $ACTUAL"
@@ -35,8 +35,8 @@ jobs:
           tag_name: hardened-v1
           name: Free Fire Hardened
           body: |
-            Monite -> GameCore rename, strings nulled, eSign marker dropped.
-            SHA256: 03247af1c65f3736207da85e1f9e179d0968eeb4016f49328f51b2ffc5b6d118
+            v2 - minimal byte-level LC_ID_DYLIB rewrite, LC_CODE_SIGNATURE preserved.
+            SHA256: ea7d17bc9cdb75bc3ac218f30b5e9f8dfcdbd2bb5d6d946edb5979443e59153b
           files: FreeFire_Hardened.ipa
           draft: false
           prerelease: false
