@@ -3,3 +3,4 @@ models
 tests
 __pycache__
 *.pyc
+pc-optimize
